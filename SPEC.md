@@ -33,7 +33,8 @@ Và đây là câu thứ hai của đoạn 2.
 ```
 
 ### 2.3. Xử lý ngoại lệ đầu vào
-* Nếu phần đầu văn bản không có thẻ `[...]`, hệ thống tự động gán nhãn mặc định `[Text 1]`.
+* Nếu phần đầu văn bản có nội dung đứng trước thẻ `[...]` đầu tiên, nội dung đó sẽ được gộp chung (nối vào đầu) câu/đoạn của thẻ `[...]` đầu tiên chứ **không chia thành file Text 1 riêng biệt**.
+* Nếu toàn bộ văn bản không chứa thẻ `[...]` nào, hệ thống gán nhãn mặc định `[Text 1]` cho duy nhất 1 block duy nhất.
 
 ---
 
@@ -44,10 +45,10 @@ Và đây là câu thứ hai của đoạn 2.
 * **Fallback:** Nếu để trống, hệ thống tự động sinh tên dạng `batch_YYYYMMDD_HHMMSS`.
 
 ### 3.2. Cấu trúc lưu trữ trên đĩa
-Toàn bộ tệp đầu ra được lưu trữ trong thư mục riêng:
-`outputs\generated\<tên_tùy_chọn>\`
+* **Khi có từ 2 thẻ `[...]` trở lên:** Đầu ra được lưu trữ trong thư mục riêng: `outputs\generated\<tên_tùy_chọn>\`
+* **Khi chỉ có 1 thẻ `[...]` hoặc 0 thẻ:** Đầu ra được xuất trực tiếp vào **thư mục gốc** `outputs\generated\` (dưới tên `<tên_tùy_chọn>.wav` hoặc `YYYYMMDD_HHMMSS_<giọng>.wav`) chứ không tự tạo thư mục con.
 
-Bao gồm các tệp thành phần:
+Bao gồm các tệp thành phần (cho chế độ Batch đa block):
 1. **Tệp Audio (.wav):** `tên_tùy_chọn_01.wav`, `tên_tùy_chọn_02.wav`,... (đánh số chỉ số có dạng `01`, `02`... để sắp xếp đúng thứ tự).
 2. **Tệp Ánh xá (.txt):** `<tên_tùy_chọn>_mapping.txt` chứa danh sách kèm mốc thời gian Timeline (`[Start_Time -> End_Time]`):
    ```text
@@ -126,6 +127,7 @@ Thay vì liệt kê tràn ngập các tệp `.wav` riêng lẻ, giao diện Lị
 * **Quy tắc lọc (Filter Rule):** Khi trình nối thực hiện quét các tệp âm thanh phân đoạn trong thư mục:
   * Chỉ nhận các tệp phân đoạn có đuôi số dạng `_\d+.wav` (ví dụ `_01.wav`, `_02.wav`).
   * **Tự động loại trừ** mọi tệp chứa hậu tố `_FULL_MERGED.*` hoặc `_merged` để tránh bị lặp chèn tệp gộp vào chính nó.
+  * **Không nối (Skip Merge):** Nếu thư mục chỉ chứa **1 tệp audio duy nhất** (hoặc 0 tệp), hệ thống sẽ không thực hiện nối và không tạo tệp `_FULL_MERGED`.
 
 ### 6.2. Danh sách Định dạng & Bitrate Xuất Tệp Gộp (Export Formats)
 Hệ thống sử dụng FFmpeg (`ffmpeg/bin/ffmpeg.exe` local hoặc FFmpeg hệ thống) để mã hóa xuất tệp gộp với các tùy chọn:

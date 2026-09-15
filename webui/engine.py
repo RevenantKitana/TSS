@@ -367,7 +367,7 @@ def parse_text_blocks(text: str) -> list[dict]:
     
     Supports:
     - Multi-line body text per block
-    - Text before the first `[...]` tag (gets assigned default `[Text 1]`)
+    - Text before the first `[...]` tag gets prepended to the first block (not split into a separate block)
     - Manual skip prefixes: `#`, `!`, `skip:`, `ignore:` before or inside `[...]`
     """
     if not text or not text.strip():
@@ -384,24 +384,28 @@ def parse_text_blocks(text: str) -> list[dict]:
         prefix_text = text.strip()
         text = ""
 
-    blocks = []
-    if prefix_text:
-        blocks.append({
-            "index": 1,
-            "tag": "Text 1",
-            "raw_tag": "[Text 1]",
-            "text": prefix_text,
-            "is_skipped": False
-        })
-
     pattern = r"(?:^|\n)\s*([#!]?)\s*\[(.*?)\]\s*(.*?)(?=(?:^|\n)\s*[#!]?\s*\[|$)"
     matches = re.findall(pattern, text, flags=re.DOTALL)
 
-    start_idx = len(blocks) + 1
-    for i, (prefix_sym, tag_content, body_text) in enumerate(matches, start=start_idx):
+    blocks = []
+    if not matches:
+        if prefix_text:
+            blocks.append({
+                "index": 1,
+                "tag": "Text 1",
+                "raw_tag": "[Text 1]",
+                "text": prefix_text,
+                "is_skipped": False
+            })
+        return blocks
+
+    for i, (prefix_sym, tag_content, body_text) in enumerate(matches, start=1):
         clean_tag = tag_content.strip()
         clean_body = body_text.strip()
         
+        if i == 1 and prefix_text:
+            clean_body = f"{prefix_text}\n{clean_body}".strip() if clean_body else prefix_text
+
         is_skipped = bool(prefix_sym)
         if (clean_tag.startswith("#") or clean_tag.startswith("!") or 
             clean_tag.lower().startswith("skip:") or clean_tag.lower().startswith("ignore:")):
@@ -652,7 +656,7 @@ def concat_folder_audio(folder_name_or_path: str, output_format: str = "WAV (PCM
             idx = int(match.group(1))
             segment_wavs.append((idx, f))
 
-    if not segment_wavs:
+    if len(segment_wavs) <= 1:
         return None
 
     segment_wavs.sort(key=lambda x: x[0])
@@ -764,13 +768,18 @@ def generate_batch_stream(
     if not blocks:
         raise ValueError("Vui lòng nhập văn bản để tổng hợp.")
 
-    folder_tag = sanitize_filename(custom_name)
+    is_single = len(blocks) <= 1
+    custom_tag = sanitize_filename(custom_name)
     ts_now = time.strftime("%Y%m%d_%H%M%S")
-    if not folder_tag:
-        folder_tag = f"batch_{ts_now}"
 
-    out_dir = os.path.join(GENERATED_DIR, folder_tag)
-    os.makedirs(out_dir, exist_ok=True)
+    if is_single:
+        out_dir = GENERATED_DIR
+        tag_name_clean = sanitize_filename(voice_name or "uncond")
+        folder_tag = custom_tag if custom_tag else f"{ts_now}_{tag_name_clean}"
+    else:
+        folder_tag = custom_tag if custom_tag else f"batch_{ts_now}"
+        out_dir = os.path.join(GENERATED_DIR, folder_tag)
+        os.makedirs(out_dir, exist_ok=True)
 
     tts = get_tts()
     voice_emb = None
@@ -795,7 +804,10 @@ def generate_batch_stream(
         tag_name = b["tag"]
         block_text = b["text"]
         raw_tag = b["raw_tag"]
-        file_name = f"{folder_tag}_{idx:02d}.wav"
+        if is_single:
+            file_name = f"{folder_tag}.wav"
+        else:
+            file_name = f"{folder_tag}_{idx:02d}.wav"
         file_path = os.path.join(out_dir, file_name)
 
         if b["is_skipped"]:
@@ -929,28 +941,31 @@ def generate_batch_stream(
         finally:
             stream.close()
 
-    mapping_path = os.path.join(out_dir, f"{folder_tag}_mapping.txt")
-    with open(mapping_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(mapping_lines))
+    if not is_single:
+        mapping_path = os.path.join(out_dir, f"{folder_tag}_mapping.txt")
+        with open(mapping_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(mapping_lines))
 
-    info_path = os.path.join(out_dir, "info.json")
-    with open(info_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "folder_name": folder_tag,
-            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "voice": voice_name if use_voice else "không giọng",
-            "total_items": len(blocks),
-            "total_duration_sec": round(current_timeline_sec, 3),
-            "total_duration_timestamp": format_timestamp(current_timeline_sec),
-            "items": items_meta
-        }, f, indent=2, ensure_ascii=False)
+        info_path = os.path.join(out_dir, "info.json")
+        with open(info_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "folder_name": folder_tag,
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "voice": voice_name if use_voice else "không giọng",
+                "total_items": len(blocks),
+                "total_duration_sec": round(current_timeline_sec, 3),
+                "total_duration_timestamp": format_timestamp(current_timeline_sec),
+                "items": items_meta
+            }, f, indent=2, ensure_ascii=False)
 
     merged_path = None
-    if auto_concat:
-        yield f"Đang tiến hành nối tất cả các tệp audio trong batch thành {merged_format}...", last_saved_path, "Đang nối..."
-        merged_path = concat_folder_audio(out_dir, output_format=merged_format)
-        if merged_path:
-            last_saved_path = merged_path
+    if auto_concat and not is_single:
+        valid_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
+        if len(valid_wavs) > 1:
+            yield f"Đang tiến hành nối tất cả các tệp audio trong batch thành {merged_format}...", last_saved_path, "Đang nối..."
+            merged_path = concat_folder_audio(out_dir, output_format=merged_format)
+            if merged_path:
+                last_saved_path = merged_path
 
     if result is not None:
         result["folder_path"] = out_dir
@@ -958,7 +973,8 @@ def generate_batch_stream(
         if merged_path:
             result["merged_path"] = merged_path
 
-    status_msg = f"Xong toàn bộ batch — Tổng thời lượng: {format_timestamp(current_timeline_sec)} — đã lưu vào {out_dir}"
+    folder_disp = "Thư mục gốc (Mặc định)" if is_single else out_dir
+    status_msg = f"Xong toàn bộ batch — Tổng thời lượng: {format_timestamp(current_timeline_sec)} — đã lưu vào {folder_disp}"
     if merged_path:
         status_msg += f"\n⭐ Đã tự động tạo tệp gộp ({merged_format}): {os.path.basename(merged_path)}"
 

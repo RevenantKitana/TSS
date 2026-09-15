@@ -419,7 +419,12 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
 
     folders = engine.list_generated_folders()
     folder_choices = [(f["label"], f["folder_name"]) for f in folders]
-    default_folder = folder_choices[0][1] if folder_choices else None
+    
+    out_folder = result.get("folder_path", "")
+    if out_folder == engine.GENERATED_DIR:
+        default_folder = "__legacy__"
+    else:
+        default_folder = folder_choices[0][1] if folder_choices else None
 
     file_choices = []
     default_file = last_file
@@ -429,11 +434,11 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
         if not default_file and file_choices:
             default_file = file_choices[0][1]
 
-    out_folder = result.get("folder_path", "")
+    display_target = "Thư mục gốc (Mặc định)" if out_folder == engine.GENERATED_DIR else out_folder
     yield (
         gr.update(),
         default_file,
-        f"Xong — Đã hoàn thành toàn bộ batch trong {out_folder}",
+        f"Xong — Đã hoàn thành và lưu vào {display_target}",
         gr.update(choices=folder_choices, value=default_folder),
         gr.update(choices=file_choices, value=default_file),
         gr.update(),
@@ -444,9 +449,19 @@ def concat_audio_ui(folder_name, merged_format):
     if not folder_name or folder_name == "__legacy__":
         return gr.update(), None, "Hãy chọn một thư mục dự án hợp lệ để nối audio."
     
+    target_dir = folder_name
+    if not os.path.isabs(target_dir):
+        target_dir = os.path.join(engine.GENERATED_DIR, folder_name)
+
+    if os.path.isdir(target_dir):
+        all_files = os.listdir(target_dir)
+        segment_wavs = [f for f in all_files if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
+        if len(segment_wavs) <= 1:
+            return gr.update(), None, f"Thư mục '{folder_name}' chỉ có {len(segment_wavs)} tệp audio duy nhất, không cần nối."
+
     merged_path = engine.concat_folder_audio(folder_name, output_format=merged_format)
     if not merged_path:
-        return gr.update(), None, f"Không tìm thấy file audio phân đoạn hợp lệ trong thư mục {folder_name}."
+        return gr.update(), None, f"Không tìm thấy đủ tệp audio phân đoạn (cần 2 tệp trở lên) trong thư mục {folder_name}."
 
     file_items = engine.get_folder_files(folder_name)
     file_choices = [(it["label"], it["path"]) for it in file_items]
