@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
 .venv/
 venv/
 .pytest_cache/
@@ -14,6 +15,7 @@ models/
 ZeroTTS_model/
 js/node_modules/
 js/dist/
+ffmpeg/
 
 # cpp/: cmake output, converted weights, and the WASM artifacts staged for Vite.
 # cpp/vendor-ggml is a submodule, not ignored. `models/` and `build/` above

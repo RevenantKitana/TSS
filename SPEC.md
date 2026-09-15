@@ -49,21 +49,43 @@ Toàn bộ tệp đầu ra được lưu trữ trong thư mục riêng:
 
 Bao gồm các tệp thành phần:
 1. **Tệp Audio (.wav):** `tên_tùy_chọn_01.wav`, `tên_tùy_chọn_02.wav`,... (đánh số chỉ số có dạng `01`, `02`... để sắp xếp đúng thứ tự).
-2. **Tệp Ánh xá (.txt):** `tên_tùy_chọn_mapping.txt` chứa danh sách theo cấu trúc:
+2. **Tệp Ánh xá (.txt):** `<tên_tùy_chọn>_mapping.txt` chứa danh sách kèm mốc thời gian Timeline (`[Start_Time -> End_Time]`):
    ```text
-   [tên_tùy_chọn_01] [Text 1]
-   [tên_tùy_chọn_02] [Text 2]
+   [tên_tùy_chọn_01.wav] [00:00:00.000 -> 00:00:03.500] [Text 1]
+   [tên_tùy_chọn_02.wav] [00:00:03.500 -> 00:00:07.700] [Text 2]
    ```
-3. **Tệp Metadata tổng (.json):** `info.json` lưu thông tin tổng quan của batch:
+3. **Tệp Metadata tổng (.json):** `info.json` lưu thông tin chi tiết mốc thời gian (Timeline Start/End/Duration):
    ```json
    {
      "folder_name": "tên_tùy_chọn",
      "created_at": "2026-09-15 09:00:00",
      "voice": "maichi",
      "total_items": 2,
+     "total_duration_sec": 7.7,
+     "total_duration_timestamp": "00:00:07.700",
      "items": [
-       {"index": 1, "file": "tên_tùy_chọn_01.wav", "tag": "Text 1", "status": "SUCCESS"},
-       {"index": 2, "file": "tên_tùy_chọn_02.wav", "tag": "Text 2", "status": "SUCCESS"}
+       {
+         "index": 1,
+         "file": "tên_tùy_chọn_01.wav",
+         "tag": "Text 1",
+         "start_sec": 0.0,
+         "end_sec": 3.5,
+         "duration_sec": 3.5,
+         "start_timestamp": "00:00:00.000",
+         "end_timestamp": "00:00:03.500",
+         "status": "SUCCESS"
+       },
+       {
+         "index": 2,
+         "file": "tên_tùy_chọn_02.wav",
+         "tag": "Text 2",
+         "start_sec": 3.5,
+         "end_sec": 7.7,
+         "duration_sec": 4.2,
+         "start_timestamp": "00:00:03.500",
+         "end_timestamp": "00:00:07.700",
+         "status": "SUCCESS"
+       }
      ]
    }
    ```
@@ -97,9 +119,38 @@ Thay vì liệt kê tràn ngập các tệp `.wav` riêng lẻ, giao diện Lị
 
 ---
 
-## 6. KẾ HOẠCH TỔNG THỂ CÁC THÀNH PHẦN CẦN CHỈNH SỬA
+## 6. NỐI TỆP AUDIO (AUDIO CONCATENATION & MERGING)
+
+### 6.1. Quy tắc Đặt tên & Phân biệt Tệp Nối
+* Tệp sau khi nối gộp tất cả các câu sẽ được đặt tên theo mở rộng định dạng đã chọn: `<tên_tùy_chọn>_FULL_MERGED.<ext>` (ví dụ `.mp3`, `.wav`, `.flac`, `.m4a`, `.ogg`).
+* **Quy tắc lọc (Filter Rule):** Khi trình nối thực hiện quét các tệp âm thanh phân đoạn trong thư mục:
+  * Chỉ nhận các tệp phân đoạn có đuôi số dạng `_\d+.wav` (ví dụ `_01.wav`, `_02.wav`).
+  * **Tự động loại trừ** mọi tệp chứa hậu tố `_FULL_MERGED.*` hoặc `_merged` để tránh bị lặp chèn tệp gộp vào chính nó.
+
+### 6.2. Danh sách Định dạng & Bitrate Xuất Tệp Gộp (Export Formats)
+Hệ thống sử dụng FFmpeg (`ffmpeg/bin/ffmpeg.exe` local hoặc FFmpeg hệ thống) để mã hóa xuất tệp gộp với các tùy chọn:
+1. `WAV (PCM 16-bit Lossless)` - `.wav` (Mặc định)
+2. `MP3 (320 kbps)` - `.mp3` (Chất lượng cao nhất)
+3. `MP3 (192 kbps)` - `.mp3` (Chất lượng trung bình)
+4. `MP3 (128 kbps)` - `.mp3` (Tiêu chuẩn / Tiết kiệm dung lượng)
+5. `FLAC (Lossless Compressed)` - `.flac` (Nén không mất chất lượng)
+6. `M4A / AAC (256 kbps)` - `.m4a` (AAC chuẩn Apple)
+7. `OGG / Vorbis (192 kbps)` - `.ogg`
+
+### 6.3. Tính năng Nối Tự động & Thủ công
+1. **Tự động nối sau khi tạo (Auto-Merge Option):** 
+   * Trên UI có ô tích `Tự động nối các tệp audio sau khi tạo`.
+   * Ngay sau khi hoàn thành tạo tất cả các câu lẻ, engine sẽ tự động mã hóa nối và tạo tệp `_FULL_MERGED.<ext>`.
+2. **Nút Nối thủ công trên Audio Viewer (Manual Merge Button):**
+   * Trong giao diện Lịch sử, cho phép chọn định dạng mong muốn và bấm nút **🔗 Nối bộ Audio này**, hệ thống sẽ mã hóa tệp gộp mới và nạp phát ngay trên trình phát chính.
+
+---
+
+## 7. KẾ HOẠCH TỔNG THỂ CÁC THÀNH PHẦN CẦN CHỈNH SỬA
 
 | File | Nội dung điều chỉnh |
 | :--- | :--- |
-| `webui/engine.py` | Viết regex parser tách block `[...]`, bổ sung tạo folder + file `info.json` + `mapping.txt`, thêm kiểm tra `Skip Existing` và `try...except` per-block. |
-| `webui/app.py` | Thêm field `Tên thư mục tùy chọn`, Radio `Existing Files Action`, cập nhật UI History sang dạng xem Thư mục 2 cấp. |
+| `webui/engine.py` | Viết regex parser tách block `[...]`, bổ sung tạo folder + file `info.json` + `mapping.txt`, thêm kiểm tra `Skip Existing`, `try...except` per-block, định vị `ffmpeg.exe` và hàm nối `concat_folder_audio` đa định dạng. |
+| `webui/app.py` | Thêm field `Tên thư mục tùy chọn`, Checkbox `Auto-Merge`, Dropdown `Định dạng tệp nối`, Radio `Existing Files Action`, nút `🔗 Nối bộ Audio này` trên History UI. |
+
+

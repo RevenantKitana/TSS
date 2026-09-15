@@ -312,86 +312,147 @@ def play_selected(evt: gr.SelectData, file_list):
     return None
 
 
-# ── generation ───────────────────────────────────────────────────────────────
-
 def clear_players():
     """Blank both players as their own event (not part of the generate run) so a
     new generation can't be heard on top of the previous one's buffered audio."""
     return audio_stream.player_html(None), None
 
 
-def generate_ui(text, voice_name, mode, max_chunk_sec, cfg_scale, temperature,
-                topk, topp, repetition_penalty, eoa_extra_frames, file_list):
-    """Streams audio out through webui/audio_stream.py — a single continuous WAV
-    response — NOT through gr.Audio(streaming=True).
+def refresh_history():
+    folders = engine.list_generated_folders()
+    folder_choices = [(f["label"], f["folder_name"]) for f in folders]
+    default_folder = folder_choices[0][1] if folder_choices else None
 
-    That component is not a continuous waveform: Gradio turns every yielded chunk
-    into its own HLS segment with an independent AAC encode, so each one carries
-    encoder priming at the front and zero padding at the back. Concatenated, every
-    chunk boundary clicks; and our first chunks are 1-4 codec frames (0.08-0.32 s),
-    shorter than AAC's own priming, which is why the first chunk appears to repeat.
-    The saved .wav is always fine — it is the transport that is broken.
+    file_choices = []
+    default_file = None
+    if default_folder:
+        file_items = engine.get_folder_files(default_folder)
+        file_choices = [(it["label"], it["path"]) for it in file_items]
+        if file_choices:
+            default_file = file_choices[0][1]
 
-    Outputs: (live player HTML, completed-file player, status, history dataset,
-    history state, segments box).
+    return (
+        gr.update(choices=folder_choices, value=default_folder),
+        gr.update(choices=file_choices, value=default_file),
+        default_file,
+    )
+
+
+def on_folder_change(folder_name):
+    if not folder_name:
+        return gr.update(choices=[], value=None), None
+    file_items = engine.get_folder_files(folder_name)
+    file_choices = [(it["label"], it["path"]) for it in file_items]
+    default_file = file_choices[0][1] if file_choices else None
+    return gr.update(choices=file_choices, value=default_file), default_file
+
+
+def on_file_change(file_path):
+    if file_path and os.path.isfile(file_path):
+        return file_path
+    return None
+
+
+FORMAT_CHOICES = [
+    "WAV (PCM)",
+    "MP3 (320 kbps)",
+    "MP3 (192 kbps)",
+    "MP3 (128 kbps)",
+    "FLAC",
+    "M4A (256 kbps)",
+    "OGG (192 kbps)",
+]
+
+
+def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat, merged_format,
+                max_chunk_sec, cfg_scale, temperature, topk, topp,
+                repetition_penalty, eoa_extra_frames):
+    """Batch generator streaming handler for Gradio UI.
+
+    Outputs: (live player HTML, completed-file player, status, folder_dropdown,
+    file_dropdown, segments box).
     """
     use_voice = mode == MODE_VOICE
     if use_voice and not voice_name:
         yield (gr.update(), gr.update(), "Hãy chọn một giọng đọc trước.",
-               gr.update(), file_list, gr.update())
+               gr.update(), gr.update(), gr.update())
         return
     if len(text or "") > engine.MAX_TEXT_CHARS:
         yield (gr.update(), gr.update(),
                f"Văn bản quá dài ({len(text)} ký tự, tối đa {engine.MAX_TEXT_CHARS}).",
-               gr.update(), file_list, gr.update())
+               gr.update(), gr.update(), gr.update())
         return
 
-    segments = engine.get_text_segments(text, max_chunk_sec=max_chunk_sec)
-    segments_text = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(segments))
-    yield gr.update(), gr.update(), "Đang tạo…", gr.update(), file_list, segments_text
-
-    sample_rate = engine.get_sample_rate()
-    sid = audio_stream.open_stream(sample_rate)
-    # Show the player before the first chunk exists: the route blocks until audio
-    # arrives, so the browser connects and starts buffering right away.
-    yield (audio_stream.player_html(sid), gr.update(), "Đang tạo…",
-           gr.update(), file_list, gr.update())
-
     result: dict = {}
-    n_samples = 0
+    last_file = None
     try:
-        try:
-            for _sr, chunk in engine.generate_stream(
-                text=text, voice_name=voice_name, max_chunk_sec=max_chunk_sec,
-                cfg_scale=float(cfg_scale), audio_temperature=temperature,
-                audio_topk=int(topk), audio_topp=topp,
-                audio_repetition_penalty=repetition_penalty,
-                eoa_extra_frames=int(eoa_extra_frames), use_voice=use_voice,
-                result=result,
-            ):
-                audio_stream.push(sid, chunk)
-                n_samples += chunk.shape[0]
-                yield (gr.update(), gr.update(),
-                       f"Đang tạo… {n_samples / sample_rate:.1f}s",
-                       gr.update(), file_list, gr.update())
-        except Exception as exc:
-            yield gr.update(), gr.update(), f"Lỗi: {exc}", gr.update(), file_list, gr.update()
-            return
-    finally:
-        # Ends the HTTP response cleanly, including when the run is cancelled by
-        # the Stop button (the generator is closed, which lands us here).
-        audio_stream.close(sid)
+        for status_msg, completed_file, segs_text in engine.generate_batch_stream(
+            text=text, voice_name=voice_name, custom_name=custom_name,
+            overwrite_mode=overwrite_mode, auto_concat=auto_concat,
+            merged_format=merged_format, max_chunk_sec=max_chunk_sec,
+            cfg_scale=float(cfg_scale), audio_temperature=temperature,
+            audio_topk=int(topk), audio_topp=topp,
+            audio_repetition_penalty=repetition_penalty,
+            eoa_extra_frames=int(eoa_extra_frames), use_voice=use_voice,
+            result=result,
+        ):
+            if completed_file:
+                last_file = completed_file
+            yield (
+                gr.update(),
+                completed_file or gr.update(),
+                status_msg,
+                gr.update(),
+                gr.update(),
+                segs_text,
+            )
+    except Exception as exc:
+        yield (
+            gr.update(),
+            gr.update(),
+            f"Lỗi: {exc}",
+            gr.update(),
+            gr.update(),
+            gr.update(),
+        )
+        return
 
-    files = engine.list_generated()
-    saved = result.get("path")
+    folders = engine.list_generated_folders()
+    folder_choices = [(f["label"], f["folder_name"]) for f in folders]
+    default_folder = folder_choices[0][1] if folder_choices else None
+
+    file_choices = []
+    default_file = last_file
+    if default_folder:
+        file_items = engine.get_folder_files(default_folder)
+        file_choices = [(it["label"], it["path"]) for it in file_items]
+        if not default_file and file_choices:
+            default_file = file_choices[0][1]
+
+    out_folder = result.get("folder_path", "")
     yield (
         gr.update(),
-        saved,
-        f"Xong — {n_samples / sample_rate:.1f}s. Đã lưu vào {saved}" if saved else "Xong.",
-        gr.update(samples=_history_rows(files)),
-        files,
+        default_file,
+        f"Xong — Đã hoàn thành toàn bộ batch trong {out_folder}",
+        gr.update(choices=folder_choices, value=default_folder),
+        gr.update(choices=file_choices, value=default_file),
         gr.update(),
     )
+
+
+def concat_audio_ui(folder_name, merged_format):
+    if not folder_name or folder_name == "__legacy__":
+        return gr.update(), None, "Hãy chọn một thư mục dự án hợp lệ để nối audio."
+    
+    merged_path = engine.concat_folder_audio(folder_name, output_format=merged_format)
+    if not merged_path:
+        return gr.update(), None, f"Không tìm thấy file audio phân đoạn hợp lệ trong thư mục {folder_name}."
+
+    file_items = engine.get_folder_files(folder_name)
+    file_choices = [(it["label"], it["path"]) for it in file_items]
+    return gr.update(choices=file_choices, value=merged_path), merged_path, f"⭐ Nối audio ({merged_format}) thành công! Đã lưu vào {merged_path}"
+
+
 
 
 with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
@@ -418,8 +479,32 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
                 text_box = gr.Textbox(
                     value=DEFAULT_TEXT, label=None, show_label=False,
                     lines=7, max_lines=20, container=False,
-                    placeholder="Nhập văn bản tiếng Việt…",
+                    placeholder="Nhập văn bản tiếng Việt… (Sử dụng [Text 1] để phân đoạn batch)",
                 )
+                with gr.Row():
+                    custom_name_box = gr.Textbox(
+                        label="Tên thư mục / Tiền tố tùy chọn",
+                        placeholder="Ví dụ: du_an_1 (Mặc định: batch_YYYYMMDD_HHMMSS)",
+                        scale=3,
+                    )
+                    overwrite_mode_radio = gr.Radio(
+                        choices=["Ghi đè tất cả (Overwrite All)", "Bỏ qua file đã có (Skip Existing)"],
+                        value="Ghi đè tất cả (Overwrite All)",
+                        label="Xử lý tệp đã có sẵn",
+                        scale=2,
+                    )
+                with gr.Row():
+                    auto_concat_checkbox = gr.Checkbox(
+                        value=True,
+                        label="🔗 Tự động nối các tệp audio sau khi tạo (Auto-Merge)",
+                        scale=3,
+                    )
+                    merged_format_dropdown = gr.Dropdown(
+                        choices=FORMAT_CHOICES,
+                        value="WAV (PCM)",
+                        label="Định dạng tệp nối (Format)",
+                        scale=2,
+                    )
                 with gr.Row(elem_classes="zt-actions"):
                     generate_btn = gr.Button("🎙️  Tạo giọng nói", variant="primary",
                                              elem_id="zt-generate", scale=3)
@@ -472,16 +557,61 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
 
             with gr.Column(elem_classes="zt-card"):
                 with gr.Row():
-                    gr.Markdown("Đã tạo gần đây", elem_classes="zt-card-title")
+                    gr.Markdown("Lịch sử theo Thư mục", elem_classes="zt-card-title")
                     refresh_history_btn = gr.Button("↻", scale=0, min_width=48)
-                gr.Markdown("Bấm vào một mục để nghe lại ở trình phát chính.",
+                gr.Markdown("Chọn thư mục dự án và file audio bên trong để phát lại.",
                             elem_classes="zt-hint")
-                history_dataset = gr.Dataset(
-                    components=[gr.Textbox(visible=False),
-                                gr.Textbox(visible=False)], samples=[],
-                    label=None, show_label=False, samples_per_page=20,
-                    elem_id="zt-history", elem_classes="zt-list",
+                folder_dropdown = gr.Dropdown(
+                    choices=[], label="Thư mục dự án (Batch Folder)", value=None,
+                    interactive=True
                 )
+                with gr.Row():
+                    file_dropdown = gr.Dropdown(
+                        choices=[], label="Danh sách file audio", value=None,
+                        interactive=True, scale=4
+                    )
+                    concat_btn = gr.Button("🔗 Nối bộ Audio này", scale=2, min_width=140)
+
+    # ── User Guide section ───────────────────────────────────────────────────
+    with gr.Accordion("📖 Hướng dẫn sử dụng & Cú pháp Batch Text-to-Audio", open=False, elem_classes="zt-card"):
+        gr.Markdown("""
+### 1. Cú pháp ngắt đoạn & Tạo nhiều file audio (Batch Mode)
+Sử dụng thẻ nhãn dạng `[Text 1]`, `[Text 2]`,... để phân tách các câu/đoạn văn bản thành các tệp audio riêng lẻ:
+```text
+[Text 1] Đây là câu thứ nhất của đoạn 1.
+Đây là câu thứ hai nằm trên dòng mới nhưng không có tag.
+Nó vẫn sẽ được gộp chung vào âm thanh của File 1.
+
+[Text 2] Đây là câu đầu tiên của đoạn 2.
+Và đây là câu thứ hai của đoạn 2.
+```
+* **Lưu ý:** Văn bản xuống dòng Enter bên dưới mỗi nhãn `[...]` sẽ được **gộp chung vào cùng 1 file audio** cho đến khi gặp nhãn `[...]` tiếp theo.
+
+---
+
+### 2. Cú pháp bỏ qua thủ công (Skip Syntax)
+Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nhãn để bỏ qua không render âm thanh cho câu đó:
+```text
+#[Text 2] Đoạn này sẽ bị bỏ qua không tạo audio.
+[skip: Text 3] Đoạn này cũng sẽ bị bỏ qua.
+```
+
+---
+
+### 3. Tên thư mục xuất & Định dạng tệp nối (Custom Folder & Format)
+* **Tên thư mục tùy chọn:** Nhập tên dự án (ví dụ `kịch_bản_1`). Đầu ra sẽ lưu tại `outputs/generated/kịch_bản_1/`. Nếu để trống sẽ tự đặt tên theo ngày giờ.
+* **Chế độ xử lý tệp đã có:**
+  * **Ghi đè tất cả (Overwrite All):** Render lại toàn bộ file cũ.
+  * **Bỏ qua file đã có (Skip Existing):** Bỏ qua các file audio đã có sẵn trên đĩa (giúp tiếp tục công việc khi rớt mạng/mất điện).
+* **Định dạng tệp nối (Format):** Hỗ trợ xuất tệp gộp `_FULL_MERGED` sang các định dạng `WAV (PCM)`, `MP3 (320k/192k/128k)`, `FLAC`, `M4A (256k)`, `OGG`.
+
+---
+
+### 4. Nối tệp Audio (Audio Concatenation)
+* **Tự động nối (Auto-Merge):** Đánh tích vào `🔗 Tự động nối các tệp audio sau khi tạo` để tự động tạo tệp gộp ngay khi vừa render xong batch.
+* **Nối thủ công:** Trong phần **Lịch sử theo Thư mục**, chọn thư mục dự án bất kỳ, chọn định dạng xuất và bấm nút **`🔗 Nối bộ Audio này`**.
+* **Đặc tả tệp nối:** Tệp gộp hoàn chỉnh sẽ đặt tên dạng `<tên_tùy_chọn>_FULL_MERGED.<ext>` và tự động hiển thị ở vị trí ưu tiên `⭐ [TỆP GỘP HOÀN CHỈNH]` trong danh sách.
+        """)
 
     # ── templates, below the fold: name + a real preview of the text ─────────
     with gr.Column(elem_classes="zt-card"):
@@ -552,45 +682,62 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
         fn=clear_players, outputs=[live_player, completed_audio],
     ).then(
         fn=generate_ui,
-        inputs=[text_box, voice_dropdown, mode_radio, chunk_sec_slider, cfg_slider,
-                temperature_slider, topk_slider, topp_slider,
-                repetition_penalty_slider, eoa_extra_slider, history_state],
-        outputs=[live_player, completed_audio, gen_status, history_dataset,
-                 history_state, segments_box],
+        inputs=[text_box, voice_dropdown, mode_radio, custom_name_box, overwrite_mode_radio, auto_concat_checkbox, merged_format_dropdown,
+                chunk_sec_slider, cfg_slider, temperature_slider, topk_slider, topp_slider,
+                repetition_penalty_slider, eoa_extra_slider],
+        outputs=[live_player, completed_audio, gen_status, folder_dropdown,
+                 file_dropdown, segments_box],
     )
     stop_btn.click(fn=None, inputs=None, outputs=None, cancels=[gen_event])
 
     refresh_history_btn.click(fn=refresh_history,
-                              outputs=[history_dataset, history_state])
-    history_dataset.select(fn=play_selected, inputs=[history_state],
-                           outputs=[completed_audio])
+                              outputs=[folder_dropdown, file_dropdown, completed_audio])
+    folder_dropdown.change(fn=on_folder_change, inputs=[folder_dropdown],
+                           outputs=[file_dropdown, completed_audio])
+    file_dropdown.change(fn=on_file_change, inputs=[file_dropdown],
+                         outputs=[completed_audio])
+    concat_btn.click(fn=concat_audio_ui, inputs=[folder_dropdown, merged_format_dropdown],
+                     outputs=[file_dropdown, completed_audio, gen_status])
+
+
     sample_texts_dataset.select(fn=select_sample_text, inputs=[sample_names_state],
                                 outputs=[text_box])
 
     def _on_load():
-        # Blocks is one shared graph across page loads, and this may have been
-        # started by something other than __main__ (plain demo.launch(), `gradio
-        # app.py`, an external mount) — the live-audio route has to exist on
-        # whatever FastAPI app is actually serving us, or the player 404s.
         _ensure_stream_route(getattr(demo, "app", None))
         voice_update = refresh_voices()
         default = voice_update["value"]
-        files = engine.list_generated()
+
+        folders = engine.list_generated_folders()
+        folder_choices = [(f["label"], f["folder_name"]) for f in folders]
+        default_folder = folder_choices[0][1] if folder_choices else None
+
+        file_choices = []
+        default_file = None
+        if default_folder:
+            file_items = engine.get_folder_files(default_folder)
+            file_choices = [(it["label"], it["path"]) for it in file_items]
+            if file_choices:
+                default_file = file_choices[0][1]
+
         samples = engine.get_sample_texts()
         preview, meta = on_voice_change(default)
         return (
             voice_update,
             preview, meta,
-            gr.update(samples=_history_rows(files)), files,
+            gr.update(choices=folder_choices, value=default_folder),
+            gr.update(choices=file_choices, value=default_file),
+            default_file,
             gr.update(samples=_template_rows(samples)), list(samples),
         )
 
     demo.load(
         fn=_on_load,
         outputs=[voice_dropdown, voice_preview, voice_meta,
-                 history_dataset, history_state,
+                 folder_dropdown, file_dropdown, completed_audio,
                  sample_texts_dataset, sample_names_state],
     )
+
 
 
 def main() -> None:

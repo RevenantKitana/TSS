@@ -1,4 +1,4 @@
-Thiết lập cú pháp đầu vào cho text to audio:
+legacy_done { Thiết lập cú pháp đầu vào cho text to audio:
 Input 1 sẽ gồm;
 `
 [Text 1] Details_Text_1
@@ -12,4 +12,6 @@ Output: Lưu trong \outputs\generated\tên_tùy_chọn
 - txt file gồm danh sách các [text] dạng
 `
 [name1] [Text 1]
-[name2] [Text 2]
+[name2] [Text 2] }
+-------------
+Tính time line đưa vào file _mapping? Ví dụ file 1 có thời lượng a1 thì file 2 bắt đầu từ a1, file 3 bắt đầu từ a2+a1 (ax là dung lượng file)
