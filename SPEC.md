@@ -1,0 +1,105 @@
+# THIẾT LẬP VÀ ĐẶC TẢ KỸ THUẬT: BATCH TEXT-TO-AUDIO & AUDIO VIEWER (ZeroTTS)
+
+---
+
+## 1. TỔNG QUAN
+Tài liệu này đặc tả yêu cầu và giải pháp kỹ thuật cho tính năng **Batch Text-to-Audio**, **Quản lý Thư mục Dự án Tùy chỉnh**, **Cơ chế Ghi đè / Chống sập tiến trình**, và **Trình xem Lịch sử dạng Thư mục (Folder-based Audio Viewer)** trong ứng dụng ZeroTTS.
+
+---
+
+## 2. CÚ PHÁP ĐẦU VÀO (INPUT SYNTAX & PARSING)
+
+### 2.1. Phân đoạn đa dòng theo thẻ `[...]`
+* **Văn bản đầu vào:** Được chia thành các khối (Block) dựa theo các nhãn `[Tag_Name]`.
+* **Quy tắc ngắt file:**
+  * Chỉ khi gặp thẻ `[...]` tiếp theo (hoặc kết thúc văn bản) thì hệ thống mới ngắt sang tệp audio mới.
+  * Mọi dòng văn bản nằm bên dưới thẻ `[Tag_Name]` (kể cả có nhiều dấu xuống dòng Enter) đều được gộp chung vào cùng một tệp âm thanh.
+
+**Ví dụ đầu vào:**
+```text
+[Text 1] Đây là dòng 1 của đoạn 1.
+Đây là dòng 2 của đoạn 1 nằm trên dòng mới.
+Nó vẫn sẽ được gộp chung vào audio của File 1.
+
+[Text 2] Đây là câu đầu tiên của đoạn 2.
+Và đây là câu thứ hai của đoạn 2.
+```
+
+### 2.2. Ký hiệu bỏ qua thủ công (Manual Skip)
+* Để bỏ qua không render một hoặc một số block (ví dụ khi đoạn đó đã render thành công trước đó), thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước thẻ:
+```text
+#[Text 2] Đoạn này sẽ bị bỏ qua không tạo audio.
+[skip: Text 3] Đoạn này cũng sẽ bị bỏ qua.
+```
+
+### 2.3. Xử lý ngoại lệ đầu vào
+* Nếu phần đầu văn bản không có thẻ `[...]`, hệ thống tự động gán nhãn mặc định `[Text 1]`.
+
+---
+
+## 3. CẤU TRÚC ĐẦU RA & QUẢN LÝ THƯ MỤC (OUTPUT STRUCTURE)
+
+### 3.1. Ô nhập tên tùy chọn (Custom Folder Name)
+* Giao diện bổ sung ô `Tên thư mục / Tiền tố tùy chọn` (ví dụ: `dự_án_1`).
+* **Fallback:** Nếu để trống, hệ thống tự động sinh tên dạng `batch_YYYYMMDD_HHMMSS`.
+
+### 3.2. Cấu trúc lưu trữ trên đĩa
+Toàn bộ tệp đầu ra được lưu trữ trong thư mục riêng:
+`outputs\generated\<tên_tùy_chọn>\`
+
+Bao gồm các tệp thành phần:
+1. **Tệp Audio (.wav):** `tên_tùy_chọn_01.wav`, `tên_tùy_chọn_02.wav`,... (đánh số chỉ số có dạng `01`, `02`... để sắp xếp đúng thứ tự).
+2. **Tệp Ánh xá (.txt):** `tên_tùy_chọn_mapping.txt` chứa danh sách theo cấu trúc:
+   ```text
+   [tên_tùy_chọn_01] [Text 1]
+   [tên_tùy_chọn_02] [Text 2]
+   ```
+3. **Tệp Metadata tổng (.json):** `info.json` lưu thông tin tổng quan của batch:
+   ```json
+   {
+     "folder_name": "tên_tùy_chọn",
+     "created_at": "2026-09-15 09:00:00",
+     "voice": "maichi",
+     "total_items": 2,
+     "items": [
+       {"index": 1, "file": "tên_tùy_chọn_01.wav", "tag": "Text 1", "status": "SUCCESS"},
+       {"index": 2, "file": "tên_tùy_chọn_02.wav", "tag": "Text 2", "status": "SUCCESS"}
+     ]
+   }
+   ```
+
+---
+
+## 4. CƠ CHẾ GHI ĐÈ & KHẢ NĂNG CHỐNG SẬP (OVERWRITE & RESILIENCE)
+
+### 4.1. Chế độ xử lý tệp đã tồn tại (Existing Files Mode)
+Cung cấp tùy chọn trên giao diện:
+1. **Ghi đè tất cả (`Overwrite All`):** Render lại và ghi đè toàn bộ tệp `.wav` cũ có cùng tên.
+2. **Bỏ qua file đã có / Chạy tiếp (`Skip Existing / Resume`):** Tự động bỏ qua các câu đã tạo file `.wav` sẵn, chỉ render các câu chưa có (giúp tiếp tục công việc khi rớt mạng/mất điện).
+3. **Ghi đè chọn lọc (`Targeted Overwrite`):** Kết hợp cú pháp `#` ở Input để chọn đúng câu bị lỗi cần render lại.
+
+### 4.2. Xử lý lỗi trong quá trình render (Fault Tolerance)
+* Quá trình tạo âm thanh cho từng block được bọc trong khối `try...except`.
+* Nếu 1 câu bị lỗi render (vỡ tiếng, lỗi ký tự...), hệ thống ghi nhận trạng thái `[FAILED]`, **bỏ qua câu lỗi và tiếp tục render các câu còn lại** mà không làm ngắt toàn bộ tiến trình.
+
+---
+
+## 5. GIAO DIỆN AUDIO VIEWER DẠNG THƯ MỤC (FOLDER-BASED AUDIO VIEWER)
+
+### 5.1. Cấu trúc hiển thị 2 cấp (Master-Detail View)
+Thay vì liệt kê tràn ngập các tệp `.wav` riêng lẻ, giao diện Lịch sử (History / Audio Viewer) được tổ chức theo từng Thư mục Batch:
+
+1. **Danh sách Master (Thư mục đợt render):**
+   * Mỗi thẻ hiển thị: `📁 <tên_tùy_chọn>` | `Số câu: XX` | `Giọng: maichi` | `Ngày tạo`.
+2. **Danh sách Detail (Chi tiết các câu):**
+   * Bấm vào 1 Thư mục $\rightarrow$ nạp danh sách các tệp audio thuộc thư mục đó vào danh sách thả xuống (`Dropdown`).
+   * Chọn câu nào $\rightarrow$ phát audio tương ứng trên Trình phát Audio chính (Player).
+
+---
+
+## 6. KẾ HOẠCH TỔNG THỂ CÁC THÀNH PHẦN CẦN CHỈNH SỬA
+
+| File | Nội dung điều chỉnh |
+| :--- | :--- |
+| `webui/engine.py` | Viết regex parser tách block `[...]`, bổ sung tạo folder + file `info.json` + `mapping.txt`, thêm kiểm tra `Skip Existing` và `try...except` per-block. |
+| `webui/app.py` | Thêm field `Tên thư mục tùy chọn`, Radio `Existing Files Action`, cập nhật UI History sang dạng xem Thư mục 2 cấp. |
