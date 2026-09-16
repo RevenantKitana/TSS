@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZeroTTS Studio — Vietnamese AI Voice</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dark-theme">
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-wrap">
+        <div class="logo-icon">🎙️</div>
+        <div class="logo-text">
+          <span class="brand-title">ZeroTTS</span>
+          <span class="brand-badge">Studio Mod</span>
+        </div>
+      </div>
+      <span class="header-divider"></span>
+      <div class="header-attribution">
+        <span>Mô hình gốc bởi <a href="https://zeroweight.ai" target="_blank" rel="noopener">ZeroTTS</a></span>
+        <span class="dot">•</span>
+        <span>Mod bởi <a href="https://k.mio.io.vn" target="_blank" rel="noopener">Khánh</a></span>
+        <span class="dot">•</span>
+        <span class="badge-cpu">Realtime CPU</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div id="systemStatus" class="status-pill status-ready">
+        <span class="status-dot"></span>
+        <span id="systemStatusText">Sẵn sàng</span>
+      </div>
+      <button id="themeToggleBtn" class="btn-icon" title="Chuyển đổi Giao diện Sáng/Tối">
+        <span class="theme-icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main 3-Column Studio Workspace -->
+  <main class="studio-layout">
+    
+    <!-- ── LEFT SIDEBAR: Voice Selector & Project History ──────────────────── -->
+    <aside class="sidebar-left">
+      <!-- Voice Picker Card -->
+      <section class="card voice-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator"></span>
+            <h3>Chọn giọng đọc</h3>
+          </div>
+          <button id="refreshVoicesBtn" class="btn-icon-small" title="Làm mới danh sách giọng">↻</button>
+        </div>
+
+        <div class="form-group">
+          <div class="custom-select-wrap">
+            <select id="voiceSelect" class="form-control">
+              <option value="">Đang tải danh sách giọng...</option>
+            </select>
+          </div>
+          <div id="voiceMeta" class="voice-meta-tags"></div>
+        </div>
+
+        <!-- Mini Preview Player -->
+        <div class="preview-player-wrap">
+          <label class="field-label">Nghe thử giọng mẫu:</label>
+          <audio id="voicePreviewAudio" controls class="mini-audio-player"></audio>
+        </div>
+      </section>
+
+      <!-- History & Project Card -->
+      <section class="card history-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator"></span>
+            <h3>Lịch sử & Dự án</h3>
+          </div>
+          <button id="refreshHistoryBtn" class="btn-icon-small" title="Làm mới lịch sử">↻</button>
+        </div>
+        <p class="card-hint">Chọn thư mục dự án và tệp âm thanh đã tạo.</p>
+
+        <div class="form-group">
+          <label class="field-label" for="historyFolderSelect">Thư mục dự án:</label>
+          <select id="historyFolderSelect" class="form-control">
+            <option value="">Chưa có dự án nào</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="field-label" for="historyFileSelect">Danh sách file audio:</label>
+          <select id="historyFileSelect" class="form-control">
+            <option value="">Chưa chọn file</option>
+          </select>
+        </div>
+
+        <div class="history-actions">
+          <button id="concatBtn" class="btn btn-secondary btn-sm" title="Nối tất cả audio phân đoạn trong thư mục">
+            <span>🔗</span> Nối tất cả audio
+          </button>
+          <button id="openHistoryFolderBtn" class="btn btn-secondary btn-sm" title="Mở thư mục dự án trên Explorer">
+            <span>📂</span> Mở thư mục này
+          </button>
+        </div>
+      </section>
+    </aside>
+
+    <!-- ── CENTER AREA: Main Editor & Playback Result ──────────────────────── -->
+    <section class="center-workspace">
+      <!-- Editor Card -->
+      <div class="card editor-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator brand-indicator"></span>
+            <h2>Soạn thảo văn bản</h2>
+          </div>
+          <div class="editor-tools">
+            <button id="insertTagBtn" class="btn-text" title="Chèn thẻ phân đoạn Batch [Text 1]">+ Thẻ [Text n]</button>
+            <button id="clearTextBtn" class="btn-text" title="Xoá toàn bộ nội dung">Xoá</button>
+            <button id="sampleTextBtn" class="btn-text" title="Chèn văn bản mẫu">Mẫu</button>
+          </div>
+        </div>
+
+        <div class="textarea-container">
+          <textarea id="mainTextInput" class="main-textarea" rows="8" placeholder="Nhập văn bản tiếng Việt… (Sử dụng nhãn [Text 1], [Text 2] để tách thành nhiều file audio riêng biệt)">Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS.</textarea>
+          <div class="textarea-footer">
+            <span class="hint-text">💡 Dùng nhãn <code>[Text 1]</code> để tạo nhiều file audio trong 1 lần chạy</span>
+            <span id="charCount" class="char-count">65 / 5000</span>
+          </div>
+        </div>
+
+        <!-- Collapsible Batch Settings -->
+        <details class="accordion-box">
+          <summary class="accordion-summary">
+            <span class="summary-icon">📁</span>
+            <span>Cấu hình xuất & Tách lô (Batch Settings)</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-content">
+            <div class="grid-2col">
+              <div class="form-group">
+                <label class="field-label" for="customNameInput">Tên thư mục / Tên tệp tuỳ chỉnh:</label>
+                <input type="text" id="customNameInput" class="form-control" placeholder="Để trống sẽ tự đặt theo thời gian">
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="overwriteModeSelect">Chế độ ghi đè tệp:</label>
+                <select id="overwriteModeSelect" class="form-control">
+                  <option value="Ghi đè tất cả (Overwrite All)">Ghi đè tất cả (Overwrite All)</option>
+                  <option value="Bỏ qua file đã tạo (Skip Existing)">Bỏ qua file đã tạo (Skip Existing)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2col" style="margin-top: 0.5rem;">
+              <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="autoConcatCheck" checked>
+                  <span>🔗 Tự động nối các tệp audio sau khi tạo</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="mergedFormatSelect">Định dạng file nối (Auto-Merge):</label>
+                <select id="mergedFormatSelect" class="form-control">
+                  <option value="WAV (PCM)">WAV (PCM)</option>
+                  <option value="MP3 (320 kbps)">MP3 (320 kbps)</option>
+                  <option value="MP3 (192 kbps)">MP3 (192 kbps)</option>
+                  <option value="MP3 (128 kbps)">MP3 (128 kbps)</option>
+                  <option value="FLAC">FLAC</option>
+                  <option value="M4A (256 kbps)">M4A (256 kbps)</option>
+                  <option value="OGG (192 kbps)">OGG (192 kbps)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Generation Trigger Buttons -->
+        <div class="action-bar">
+          <button id="generateBtn" class="btn btn-primary btn-generate">
+            <span class="btn-icon-action">🎙️</span>
+            <span class="btn-label">Tạo giọng nói</span>
+            <span class="shortcut-badge">Ctrl + Enter</span>
+          </button>
+          <button id="stopBtn" class="btn btn-secondary btn-stop" disabled>
+            <span>⏹️</span> Dừng
+          </button>
+        </div>
+      </div>
+
+      <!-- Result & Player Card -->
+      <div class="card result-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator brand-indicator"></span>
+            <h2>Trình phát & Kết quả</h2>
+          </div>
+          <button id="openOutputFolderBtn" class="btn btn-secondary btn-sm" title="Mở thư mục chứa kết quả">
+            <span>📂</span> Mở thư mục kết quả
+          </button>
+        </div>
+
+        <!-- Progress Status Box -->
+        <div class="progress-status-box">
+          <div class="progress-header">
+            <span id="progressMessage" class="progress-message">Sẵn sàng tạo giọng nói...</span>
+            <span id="progressPercent" class="progress-percent"></span>
+          </div>
+          <div class="progress-bar-track">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
+          </div>
+        </div>
+
+        <!-- Main Audio Player Display -->
+        <div class="main-player-wrap">
+          <div class="player-header-info">
+            <span id="currentAudioLabel" class="current-audio-label">🎵 Chưa có bản thu nào</span>
+            <a id="downloadAudioLink" href="#" class="download-link" download style="display:none;">⬇️ Tải file</a>
+          </div>
+          <audio id="mainAudioPlayer" controls class="main-audio-player"></audio>
+        </div>
+
+        <!-- Segments & Timeline Details -->
+        <details class="accordion-box" open>
+          <summary class="accordion-summary">
+            <span class="summary-icon">📊</span>
+            <span>Phân tích chi tiết các đoạn câu & Timeline</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-content">
+            <pre id="segmentsDetailsBox" class="segments-console">Chưa có dữ liệu phân đoạn.</pre>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ── RIGHT SIDEBAR: Presets & Advanced Parameters ───────────────────── -->
+    <aside class="sidebar-right">
+      <!-- Presets Card -->
+      <section class="card preset-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator accent-indicator"></span>
+            <h3>Cấu hình nhanh (Presets)</h3>
+          </div>
+        </div>
+        <p class="card-hint">Chọn nhanh bộ tham số tối ưu sẵn cho từng mục đích.</p>
+
+        <div class="preset-options">
+          <label class="preset-pill active">
+            <input type="radio" name="preset" value="default" checked>
+            <div class="preset-pill-content">
+              <span class="preset-title">🎯 Cân bằng & Tự nhiên</span>
+              <span class="preset-desc">Mặc định, ổn định, chuẩn giọng</span>
+            </div>
+          </label>
+          <label class="preset-pill">
+            <input type="radio" name="preset" value="expressive">
+            <div class="preset-pill-content">
+              <span class="preset-title">🎙️ Truyền cảm & Đọc truyện</span>
+              <span class="preset-desc">Tăng độ biểu cảm & nhấn nhá</span>
+            </div>
+          </label>
+          <label class="preset-pill">
+            <input type="radio" name="preset" value="speed">
+            <div class="preset-pill-content">
+              <span class="preset-title">⚡ Tốc độ tối ưu CPU</span>
+              <span class="preset-desc">Sinh âm thanh nhanh nhất</span>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <!-- Advanced Sliders Card -->
+      <section class="card advanced-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="title-indicator accent-indicator"></span>
+            <h3>Tuỳ chọn nâng cao</h3>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="field-label" for="modeSelect">Chế độ giọng đọc:</label>
+          <select id="modeSelect" class="form-control">
+            <option value="voice">Gói giọng đã chọn (Voice Pack)</option>
+            <option value="uncond">Tự do không cố định (Unconditioned)</option>
+          </select>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="cfgSlider">Độ bám sát giọng (CFG Scale):</label>
+            <span id="cfgVal" class="slider-val">1.0</span>
+          </div>
+          <input type="range" id="cfgSlider" min="1.0" max="4.0" step="0.1" value="1.0" class="slider-control">
+          <span class="slider-hint">1.0 = Tắt (nhanh). > 1.0 = Bám sát giọng mẫu.</span>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="chunkSecSlider">Độ dài đoạn (Chunk seconds):</label>
+            <span id="chunkSecVal" class="slider-val">15 s</span>
+          </div>
+          <input type="range" id="chunkSecSlider" min="5" max="25" step="1" value="15" class="slider-control">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="tempSlider">Độ biến thiên (Temperature):</label>
+            <span id="tempVal" class="slider-val">0.80</span>
+          </div>
+          <input type="range" id="tempSlider" min="0.1" max="1.5" step="0.05" value="0.8" class="slider-control">
+        </div>
+
+        <div class="slider-grid-2">
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="topkSlider">Top-K:</label>
+              <span id="topkVal" class="slider-val">25</span>
+            </div>
+            <input type="range" id="topkSlider" min="1" max="200" step="1" value="25" class="slider-control">
+          </div>
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="toppSlider">Top-P:</label>
+              <span id="toppVal" class="slider-val">0.95</span>
+            </div>
+            <input type="range" id="toppSlider" min="0.1" max="1.0" step="0.01" value="0.95" class="slider-control">
+          </div>
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="repSlider">Hình phạt lặp (Repetition Penalty):</label>
+            <span id="repVal" class="slider-val">1.20</span>
+          </div>
+          <input type="range" id="repSlider" min="1.0" max="2.0" step="0.05" value="1.2" class="slider-control">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="eoaSlider">Âm đuôi (Tail frames):</label>
+            <span id="eoaVal" class="slider-val">1</span>
+          </div>
+          <input type="range" id="eoaSlider" min="0" max="4" step="1" value="1" class="slider-control">
+        </div>
+      </section>
+
+      <!-- User Guide Card -->
+      <details class="card guide-card">
+        <summary class="guide-summary">
+          <span>📖 Hướng dẫn sử dụng & Cú pháp Batch</span>
+          <span class="chevron">▼</span>
+        </summary>
+        <div class="guide-content">
+          <h4>1. Phân tách file (Batch Mode)</h4>
+          <p>Dùng thẻ <code>[Text 1]</code>, <code>[Text 2]</code> để phân tách câu thành nhiều file audio:</p>
+          <pre><code>[Text 1] Xin chào các bạn.
+[Text 2] Đây là câu thứ hai.</code></pre>
+
+          <h4>2. Phím tắt tiện ích</h4>
+          <p><kbd>Ctrl</kbd> + <kbd>Enter</kbd>: Bắt đầu tạo giọng nói.</p>
+          <p><kbd>Esc</kbd>: Dừng tiến trình.</p>
+        </div>
+      </details>
+    </aside>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -511,7 +511,7 @@ def get_folder_files(folder_name_or_path: str) -> list[dict]:
         return items
     
 def get_ffmpeg_path() -> str | None:
-    """Find FFmpeg binary path (prefers local ffmpeg/bin/ffmpeg.exe, then system PATH, then auto-downloads from CDN)."""
+    """Find FFmpeg binary path (prefers local ffmpeg/bin/ffmpeg.exe, then system PATH)."""
     local_ffmpeg = os.path.join(_ROOT, "ffmpeg", "bin", "ffmpeg.exe")
     if os.path.isfile(local_ffmpeg):
         return local_ffmpeg
@@ -521,27 +521,38 @@ def get_ffmpeg_path() -> str | None:
     if system_ffmpeg:
         return system_ffmpeg
 
-    # Auto download ffmpeg.exe if missing
-    cdn_url = "https://cdn.mio.io.vn/ffmpeg.exe"
-    print(f"* Không tìm thấy ffmpeg.exe local hoặc hệ thống. Đang tự động tải về từ {cdn_url}...")
-    temp_download = local_ffmpeg + ".tmp"
+    return None
+
+
+def open_folder(path: str | None) -> str:
+    """Open target directory or file's parent directory in Windows Explorer / system file manager."""
+    import subprocess
+    import sys
+
+    if not path or path == "__legacy__":
+        target_dir = GENERATED_DIR
+    elif os.path.isabs(path):
+        target_dir = path if os.path.isdir(path) else os.path.dirname(path)
+    else:
+        target_dir = os.path.join(GENERATED_DIR, path)
+        if os.path.isfile(target_dir):
+            target_dir = os.path.dirname(target_dir)
+
+    target_dir = os.path.abspath(target_dir)
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir, exist_ok=True)
+    
     try:
-        os.makedirs(os.path.dirname(local_ffmpeg), exist_ok=True)
-        import urllib.request
-        req = urllib.request.Request(cdn_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as resp, open(temp_download, "wb") as out_file:
-            shutil.copyfileobj(resp, out_file)
-        os.replace(temp_download, local_ffmpeg)
-        print(f"* Đã tải thành công ffmpeg.exe về {local_ffmpeg}")
-        return local_ffmpeg
+        if sys.platform == "win32":
+            os.startfile(target_dir)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", target_dir])
+        else:
+            subprocess.Popen(["xdg-open", target_dir])
+        return f"📂 Đã mở thư mục trên máy: {target_dir}"
     except Exception as exc:
-        print(f"Lỗi tải ffmpeg.exe từ CDN: {exc}")
-        if os.path.isfile(temp_download):
-            try:
-                os.remove(temp_download)
-            except Exception:
-                pass
-        return None
+        return f"❌ Lỗi mở thư mục: {exc}"
+
 
 
 def get_folder_files(folder_name_or_path: str) -> list[dict]:
@@ -999,6 +1010,81 @@ def generate_batch_stream(
         status_msg += f"\n⭐ Đã tự động tạo tệp gộp ({merged_format}): {os.path.basename(merged_path)}"
 
     yield status_msg, last_saved_path, "Đã hoàn thành."
+
+
+def parse_segment_details(folder_name_or_path: str | None, active_file_path: str | None = None) -> str:
+    """Read and parse info.json, mapping.txt, or .wav.json sidecar files to format segment details.
+    
+    Format per line: [Tên giọng] [Timeline] [Label] {Voice text}
+    - If active_file_path is a FULL_MERGED file, displays full timeline with no single item highlighted.
+    - If active_file_path is a specific child file, highlights that item with ▶️ indicator.
+    """
+    if not folder_name_or_path or folder_name_or_path == "__legacy__":
+        target_dir = GENERATED_DIR
+    elif os.path.isabs(folder_name_or_path):
+        target_dir = folder_name_or_path
+    else:
+        target_dir = os.path.join(GENERATED_DIR, folder_name_or_path)
+
+    active_file_name = os.path.basename(active_file_path) if active_file_path else ""
+    is_merged_file = bool(active_file_name and ("_FULL_MERGED." in active_file_name or "_merged." in active_file_name.lower()))
+
+    info_path = os.path.join(target_dir, "info.json")
+    if os.path.isfile(info_path):
+        try:
+            with open(info_path, "r", encoding="utf-8") as f:
+                info = json.load(f)
+            folder_voice = info.get("voice", "Mặc định")
+            lines = []
+            for it in info.get("items", []):
+                fname = it.get("file", "")
+                is_active = (not is_merged_file) and bool(active_file_name and fname == active_file_name)
+                prefix = "▶️ " if is_active else "   "
+                v_name = folder_voice
+                start_ts = it.get("start_timestamp", "00:00:00.000")
+                end_ts = it.get("end_timestamp", "00:00:00.000")
+                timeline = f"[{start_ts} -> {end_ts}]"
+                tag_val = it.get('tag') or f"Text {it.get('index', 1)}"
+                label = f"[{tag_val}]"
+                text_val = it.get("text", "").strip().replace("\n", " ")
+                lines.append(f"{prefix}[{v_name}] {timeline} {label} {{{text_val}}}")
+            if lines:
+                return "\n".join(lines)
+        except Exception:
+            pass
+
+    # Single file sidecar fallback
+    if active_file_path and os.path.isfile(active_file_path):
+        sidecar_json = active_file_path + ".json"
+        if os.path.isfile(sidecar_json):
+            try:
+                with open(sidecar_json, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                v_name = data.get("voice", "Mặc định")
+                start_ts = data.get("start_timestamp", "00:00:00.000")
+                end_ts = data.get("end_timestamp", "00:00:00.000")
+                timeline = f"[{start_ts} -> {end_ts}]"
+                label = f"[{active_file_name}]"
+                text_val = data.get("text", "").strip().replace("\n", " ")
+                prefix = "   " if is_merged_file else "▶️ "
+                return f"{prefix}[{v_name}] {timeline} {label} {{{text_val}}}"
+            except Exception:
+                pass
+        return f"[{active_file_name}]"
+
+    folder_name = os.path.basename(target_dir)
+    mapping_path = os.path.join(target_dir, f"{folder_name}_mapping.txt")
+    if os.path.isfile(mapping_path):
+        try:
+            with open(mapping_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+
+    return f"📁 Thư mục: {os.path.basename(target_dir)}"
+
+
+
 
 
 

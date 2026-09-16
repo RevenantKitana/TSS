@@ -17,7 +17,7 @@ if exist "python-3.11.2-embed-amd64\python.exe" (
         "python-3.11.2-embed-amd64\python.exe" -c "with open('python-3.11.2-embed-amd64/python311._pth', 'r+') as f: txt = f.read(); txt = txt.replace('#import site', 'import site'); txt = txt + '\nLib/site-packages\n' if 'Lib/site-packages' not in txt else txt; f.seek(0); f.write(txt); f.truncate()" >nul 2>&1
     )
     
-    "python-3.11.2-embed-amd64\python.exe" -c "import zerotts, gradio" >nul 2>&1
+    "python-3.11.2-embed-amd64\python.exe" -c "import zerotts, fastapi, uvicorn" >nul 2>&1
     if errorlevel 1 (
         echo * Dang cai dat dependencies cho Python Embed local...
         where uv >nul 2>&1
@@ -35,7 +35,7 @@ if exist "python-3.11.2-embed-amd64\python.exe" (
 rem 2. Neu khong dung Python Embed local, dung moi truong ao .venv
 set "VENV_OK=0"
 if exist ".venv\Scripts\python.exe" (
-    ".venv\Scripts\python.exe" -c "import zerotts, gradio" >nul 2>&1
+    ".venv\Scripts\python.exe" -c "import zerotts, fastapi, uvicorn" >nul 2>&1
     if not errorlevel 1 set "VENV_OK=1"
 )
 
@@ -107,6 +107,6 @@ rem 5. Khoi chay Web UI hoan toan bang mo hinh local tai cho
 echo * Dang mo Web UI che do Offline bang mo hinh local trong ZeroTTS_model...
 echo * Dia chi truy cap: http://localhost:7860  hoac  http://127.0.0.1:7860
 echo.
-"%PY_CMD%" webui/app.py --model ./ZeroTTS_model
+"%PY_CMD%" webui/server.py --model ./ZeroTTS_model
 
 pause
