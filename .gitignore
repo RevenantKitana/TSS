@@ -30,3 +30,41 @@ js/public/ggml/models
 
 # internal planning docs must never land in the public repo
 docs/PLAN.md
+
+# Ignore all files in embedded python directory except current files
+python-3.11.2-embed-amd64/*
+!python-3.11.2-embed-amd64/LICENSE.txt
+!python-3.11.2-embed-amd64/_asyncio.pyd
+!python-3.11.2-embed-amd64/_bz2.pyd
+!python-3.11.2-embed-amd64/_ctypes.pyd
+!python-3.11.2-embed-amd64/_decimal.pyd
+!python-3.11.2-embed-amd64/_elementtree.pyd
+!python-3.11.2-embed-amd64/_hashlib.pyd
+!python-3.11.2-embed-amd64/_lzma.pyd
+!python-3.11.2-embed-amd64/_msi.pyd
+!python-3.11.2-embed-amd64/_multiprocessing.pyd
+!python-3.11.2-embed-amd64/_overlapped.pyd
+!python-3.11.2-embed-amd64/_queue.pyd
+!python-3.11.2-embed-amd64/_socket.pyd
+!python-3.11.2-embed-amd64/_sqlite3.pyd
+!python-3.11.2-embed-amd64/_ssl.pyd
+!python-3.11.2-embed-amd64/_uuid.pyd
+!python-3.11.2-embed-amd64/_zoneinfo.pyd
+!python-3.11.2-embed-amd64/libcrypto-1_1.dll
+!python-3.11.2-embed-amd64/libffi-8.dll
+!python-3.11.2-embed-amd64/libssl-1_1.dll
+!python-3.11.2-embed-amd64/pyexpat.pyd
+!python-3.11.2-embed-amd64/python.cat
+!python-3.11.2-embed-amd64/python.exe
+!python-3.11.2-embed-amd64/python3.dll
+!python-3.11.2-embed-amd64/python311._pth
+!python-3.11.2-embed-amd64/python311.dll
+!python-3.11.2-embed-amd64/python311.zip
+!python-3.11.2-embed-amd64/pythonw.exe
+!python-3.11.2-embed-amd64/select.pyd
+!python-3.11.2-embed-amd64/sqlite3.dll
+!python-3.11.2-embed-amd64/unicodedata.pyd
+!python-3.11.2-embed-amd64/vcruntime140.dll
+!python-3.11.2-embed-amd64/vcruntime140_1.dll
+!python-3.11.2-embed-amd64/winsound.pyd
+
