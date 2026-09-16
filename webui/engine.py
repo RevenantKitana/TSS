@@ -511,7 +511,7 @@ def get_folder_files(folder_name_or_path: str) -> list[dict]:
         return items
     
 def get_ffmpeg_path() -> str | None:
-    """Find FFmpeg binary path (prefers local ffmpeg/bin/ffmpeg.exe, then system PATH)."""
+    """Find FFmpeg binary path (prefers local ffmpeg/bin/ffmpeg.exe, then system PATH, then auto-downloads from CDN)."""
     local_ffmpeg = os.path.join(_ROOT, "ffmpeg", "bin", "ffmpeg.exe")
     if os.path.isfile(local_ffmpeg):
         return local_ffmpeg
@@ -521,7 +521,27 @@ def get_ffmpeg_path() -> str | None:
     if system_ffmpeg:
         return system_ffmpeg
 
-    return None
+    # Auto download ffmpeg.exe if missing
+    cdn_url = "https://cdn.mio.io.vn/ffmpeg.exe"
+    print(f"* Không tìm thấy ffmpeg.exe local hoặc hệ thống. Đang tự động tải về từ {cdn_url}...")
+    temp_download = local_ffmpeg + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(local_ffmpeg), exist_ok=True)
+        import urllib.request
+        req = urllib.request.Request(cdn_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp, open(temp_download, "wb") as out_file:
+            shutil.copyfileobj(resp, out_file)
+        os.replace(temp_download, local_ffmpeg)
+        print(f"* Đã tải thành công ffmpeg.exe về {local_ffmpeg}")
+        return local_ffmpeg
+    except Exception as exc:
+        print(f"Lỗi tải ffmpeg.exe từ CDN: {exc}")
+        if os.path.isfile(temp_download):
+            try:
+                os.remove(temp_download)
+            except Exception:
+                pass
+        return None
 
 
 def get_folder_files(folder_name_or_path: str) -> list[dict]:

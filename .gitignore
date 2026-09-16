@@ -15,7 +15,7 @@ models/
 ZeroTTS_model/
 js/node_modules/
 js/dist/
-ffmpeg/
+/ffmpeg/bin/ffmpeg.exe
 
 # cpp/: cmake output, converted weights, and the WASM artifacts staged for Vite.
 # cpp/vendor-ggml is a submodule, not ignored. `models/` and `build/` above
