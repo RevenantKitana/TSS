@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZeroTTS Studio — Vietnamese AI Voice</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -180,9 +181,10 @@
         <!-- Generation Trigger Buttons -->
         <div class="action-bar">
           <button id="generateBtn" class="btn btn-primary btn-generate">
-            <span class="btn-icon-action">🎙️</span>
-            <span class="btn-label">Tạo giọng nói</span>
-            <span class="shortcut-badge">Ctrl + Enter</span>
+            <span id="generateSpinner" class="btn-spinner" style="display:none;"></span>
+            <span id="generateIcon" class="btn-icon-action">🎙️</span>
+            <span id="generateLabel" class="btn-label">Tạo giọng nói</span>
+            <span id="generateShortcut" class="shortcut-badge">Ctrl + Enter</span>
           </button>
           <button id="stopBtn" class="btn btn-secondary btn-stop" disabled>
             <span>⏹️</span> Dừng
@@ -203,9 +205,12 @@
         </div>
 
         <!-- Progress Status Box -->
-        <div class="progress-status-box">
+        <div id="progressStatusBox" class="progress-status-box">
           <div class="progress-header">
-            <span id="progressMessage" class="progress-message">Sẵn sàng tạo giọng nói...</span>
+            <div class="progress-status-wrap">
+              <span id="progressSpinner" class="mini-spinner" style="display:none;"></span>
+              <span id="progressMessage" class="progress-message">Sẵn sàng tạo giọng nói...</span>
+            </div>
             <span id="progressPercent" class="progress-percent"></span>
           </div>
           <div class="progress-bar-track">
@@ -217,7 +222,17 @@
         <div class="main-player-wrap">
           <div class="player-header-info">
             <span id="currentAudioLabel" class="current-audio-label">🎵 Chưa có bản thu nào</span>
-            <a id="downloadAudioLink" href="#" class="download-link" download style="display:none;">⬇️ Tải file</a>
+            <div class="player-header-actions">
+              <div class="waveform-zoom-controls">
+                <button type="button" id="zoomOutWaveformBtn" class="btn-icon-tiny" title="Thu nhỏ sóng âm (−)">−</button>
+                <span id="waveformZoomLevel" class="zoom-level-label">1.0x</span>
+                <button type="button" id="zoomInWaveformBtn" class="btn-icon-tiny" title="Phóng to sóng âm (+)">+</button>
+                <button type="button" id="zoomResetWaveformBtn" class="btn-icon-tiny" title="Đặt lại độ thu phóng (1x)">↺</button>
+              </div>
+            </div>
+          </div>
+          <div id="waveformScrollContainer" class="waveform-scroll-container">
+            <canvas id="waveformCanvas" class="waveform-canvas" height="60"></canvas>
           </div>
           <audio id="mainAudioPlayer" controls class="main-audio-player"></audio>
         </div>
@@ -239,136 +254,224 @@
     <!-- ── RIGHT SIDEBAR: Presets & Advanced Parameters ───────────────────── -->
     <aside class="sidebar-right">
       <!-- Presets Card -->
-      <section class="card preset-card">
-        <div class="card-header">
+      <details class="card collapsible-card" open>
+        <summary class="card-summary">
           <div class="card-title">
             <span class="title-indicator accent-indicator"></span>
             <h3>Cấu hình nhanh (Presets)</h3>
           </div>
-        </div>
-        <p class="card-hint">Chọn nhanh bộ tham số tối ưu sẵn cho từng mục đích.</p>
+          <span class="chevron">▼</span>
+        </summary>
+        <div class="collapsible-content">
+          <p class="card-hint">Chọn nhanh bộ tham số tối ưu sẵn hoặc chọn Tùy chỉnh để tự do thay đổi tham số.</p>
 
-        <div class="preset-options">
-          <label class="preset-pill active">
-            <input type="radio" name="preset" value="default" checked>
-            <div class="preset-pill-content">
-              <span class="preset-title">🎯 Cân bằng & Tự nhiên</span>
-              <span class="preset-desc">Mặc định, ổn định, chuẩn giọng</span>
-            </div>
-          </label>
-          <label class="preset-pill">
-            <input type="radio" name="preset" value="expressive">
-            <div class="preset-pill-content">
-              <span class="preset-title">🎙️ Truyền cảm & Đọc truyện</span>
-              <span class="preset-desc">Tăng độ biểu cảm & nhấn nhá</span>
-            </div>
-          </label>
-          <label class="preset-pill">
-            <input type="radio" name="preset" value="speed">
-            <div class="preset-pill-content">
-              <span class="preset-title">⚡ Tốc độ tối ưu CPU</span>
-              <span class="preset-desc">Sinh âm thanh nhanh nhất</span>
-            </div>
-          </label>
+          <div class="preset-options">
+            <label class="preset-pill active">
+              <input type="radio" name="preset" value="default" checked>
+              <div class="preset-pill-content">
+                <span class="preset-title">🎯 Cân bằng & Tự nhiên</span>
+                <span class="preset-desc">Mặc định, ổn định, chuẩn giọng</span>
+              </div>
+            </label>
+            <label class="preset-pill">
+              <input type="radio" name="preset" value="expressive">
+              <div class="preset-pill-content">
+                <span class="preset-title">🎙️ Truyền cảm & Đọc truyện</span>
+                <span class="preset-desc">Tăng độ biểu cảm & nhấn nhá</span>
+              </div>
+            </label>
+            <label class="preset-pill">
+              <input type="radio" name="preset" value="speed">
+              <div class="preset-pill-content">
+                <span class="preset-title">⚡ Tốc độ tối ưu CPU</span>
+                <span class="preset-desc">Sinh âm thanh nhanh nhất</span>
+              </div>
+            </label>
+            <label class="preset-pill">
+              <input type="radio" name="preset" value="custom">
+              <div class="preset-pill-content">
+                <span class="preset-title">🛠️ Tùy chỉnh (Custom)</span>
+                <span class="preset-desc">Mở khóa toàn bộ tham số để tự tinh chỉnh</span>
+              </div>
+            </label>
+          </div>
         </div>
-      </section>
+      </details>
 
       <!-- Advanced Sliders Card -->
-      <section class="card advanced-card">
-        <div class="card-header">
+      <details id="advancedOptionsCard" class="card collapsible-card is-locked" open>
+        <summary class="card-summary">
           <div class="card-title">
             <span class="title-indicator accent-indicator"></span>
             <h3>Tuỳ chọn nâng cao</h3>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="field-label" for="modeSelect">Chế độ giọng đọc:</label>
-          <select id="modeSelect" class="form-control">
-            <option value="voice">Gói giọng đã chọn (Voice Pack)</option>
-            <option value="uncond">Tự do không cố định (Unconditioned)</option>
-          </select>
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="cfgSlider">Độ bám sát giọng (CFG Scale):</label>
-            <span id="cfgVal" class="slider-val">1.0</span>
+          <div class="summary-meta">
+            <span id="advancedLockBadge" class="badge-lock locked">🔒 Khóa theo Preset</span>
+            <span class="chevron">▼</span>
           </div>
-          <input type="range" id="cfgSlider" min="1.0" max="4.0" step="0.1" value="1.0" class="slider-control">
-          <span class="slider-hint">1.0 = Tắt (nhanh). > 1.0 = Bám sát giọng mẫu.</span>
-        </div>
-
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="chunkSecSlider">Độ dài đoạn (Chunk seconds):</label>
-            <span id="chunkSecVal" class="slider-val">15 s</span>
+        </summary>
+        <div class="collapsible-content">
+          <div id="advancedLockNotice" class="advanced-lock-notice">
+            <span>🔒 Các tham số đang khóa tự động theo Preset. <button type="button" id="switchToCustomBtn" class="notice-link-btn">Bật chế độ Tùy chỉnh 🛠️</button></span>
           </div>
-          <input type="range" id="chunkSecSlider" min="5" max="25" step="1" value="15" class="slider-control">
-        </div>
 
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="tempSlider">Độ biến thiên (Temperature):</label>
-            <span id="tempVal" class="slider-val">0.80</span>
+          <div class="form-group">
+            <label class="field-label" for="modeSelect">Chế độ giọng đọc:</label>
+            <select id="modeSelect" class="form-control" disabled>
+              <option value="voice">Gói giọng đã chọn (Voice Pack)</option>
+              <option value="uncond">Tự do không cố định (Unconditioned)</option>
+            </select>
+            <div id="modeExplanationHint" class="mode-explanation-hint">
+              <span class="hint-icon">💡</span>
+              <span id="modeExplanationText"><strong>Gói giọng (Voice Pack):</strong> Bắt chước âm sắc, phong cách và ngữ điệu từ tệp âm thanh mẫu của gói giọng được chọn.</span>
+            </div>
           </div>
-          <input type="range" id="tempSlider" min="0.1" max="1.5" step="0.05" value="0.8" class="slider-control">
-        </div>
 
-        <div class="slider-grid-2">
           <div class="slider-group">
             <div class="slider-header">
-              <label for="topkSlider">Top-K:</label>
-              <span id="topkVal" class="slider-val">25</span>
+              <label for="cfgSlider">Độ bám sát giọng (CFG Scale):</label>
+              <span id="cfgVal" class="slider-val">1.0</span>
             </div>
-            <input type="range" id="topkSlider" min="1" max="200" step="1" value="25" class="slider-control">
+            <input type="range" id="cfgSlider" min="1.0" max="4.0" step="0.1" value="1.0" class="slider-control" disabled>
+            <span class="slider-hint">1.0 = Tắt (nhanh). > 1.0 = Bám sát giọng mẫu.</span>
           </div>
+
           <div class="slider-group">
             <div class="slider-header">
-              <label for="toppSlider">Top-P:</label>
-              <span id="toppVal" class="slider-val">0.95</span>
+              <label for="chunkSecSlider">Độ dài đoạn (Chunk seconds):</label>
+              <span id="chunkSecVal" class="slider-val">15 s</span>
             </div>
-            <input type="range" id="toppSlider" min="0.1" max="1.0" step="0.01" value="0.95" class="slider-control">
+            <input type="range" id="chunkSecSlider" min="5" max="25" step="1" value="15" class="slider-control" disabled>
+            <span class="slider-hint">Độ dài tối đa của từng đoạn xử lý âm thanh.</span>
           </div>
-        </div>
 
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="repSlider">Hình phạt lặp (Repetition Penalty):</label>
-            <span id="repVal" class="slider-val">1.20</span>
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="tempSlider">Độ biến thiên (Temperature):</label>
+              <span id="tempVal" class="slider-val">0.80</span>
+            </div>
+            <input type="range" id="tempSlider" min="0.1" max="1.5" step="0.05" value="0.8" class="slider-control" disabled>
+            <span class="slider-hint">Thấp = Đều giọng; Cao = Ngữ điệu phong phú.</span>
           </div>
-          <input type="range" id="repSlider" min="1.0" max="2.0" step="0.05" value="1.2" class="slider-control">
-        </div>
 
-        <div class="slider-group">
-          <div class="slider-header">
-            <label for="eoaSlider">Âm đuôi (Tail frames):</label>
-            <span id="eoaVal" class="slider-val">1</span>
+          <div class="slider-grid-2">
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="topkSlider">Top-K:</label>
+                <span id="topkVal" class="slider-val">25</span>
+              </div>
+              <input type="range" id="topkSlider" min="1" max="200" step="1" value="25" class="slider-control" disabled>
+            </div>
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="toppSlider">Top-P:</label>
+                <span id="toppVal" class="slider-val">0.95</span>
+              </div>
+              <input type="range" id="toppSlider" min="0.1" max="1.0" step="0.01" value="0.95" class="slider-control" disabled>
+            </div>
           </div>
-          <input type="range" id="eoaSlider" min="0" max="4" step="1" value="1" class="slider-control">
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="repSlider">Hình phạt lặp (Repetition Penalty):</label>
+              <span id="repVal" class="slider-val">1.20</span>
+            </div>
+            <input type="range" id="repSlider" min="1.0" max="2.0" step="0.05" value="1.2" class="slider-control" disabled>
+            <span class="slider-hint">Ngăn chặn hiện tượng lặp từ hoặc ngân âm dài.</span>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="eoaSlider">Âm đuôi (Tail frames):</label>
+              <span id="eoaVal" class="slider-val">1</span>
+            </div>
+            <input type="range" id="eoaSlider" min="0" max="4" step="1" value="1" class="slider-control" disabled>
+            <span class="slider-hint">Thêm khung đệm cuối câu giúp ngắt nghỉ tự nhiên.</span>
+          </div>
         </div>
-      </section>
+      </details>
 
       <!-- User Guide Card -->
-      <details class="card guide-card">
-        <summary class="guide-summary">
-          <span>📖 Hướng dẫn sử dụng & Cú pháp Batch</span>
+      <details class="card collapsible-card" open>
+        <summary class="card-summary">
+          <div class="card-title">
+            <span class="title-indicator"></span>
+            <h3>📖 Hướng dẫn & Tài liệu I/O</h3>
+          </div>
           <span class="chevron">▼</span>
         </summary>
-        <div class="guide-content">
-          <h4>1. Phân tách file (Batch Mode)</h4>
-          <p>Dùng thẻ <code>[Text 1]</code>, <code>[Text 2]</code> để phân tách câu thành nhiều file audio:</p>
-          <pre><code>[Text 1] Xin chào các bạn.
-[Text 2] Đây là câu thứ hai.</code></pre>
+        <div class="collapsible-content guide-content">
+          <!-- Section 1: Input -->
+          <div class="guide-section">
+            <h4>📥 1. Dữ liệu đầu vào (Input)</h4>
+            <ul class="guide-list">
+              <li><strong>Văn bản tiếng Việt:</strong> Nhập văn bản có dấu (UTF-8). Hỗ trợ ngắt nghỉ theo dấu câu <code>.</code> <code>,</code> <code>!</code> <code>?</code> <code>...</code> <code>:</code> <code>;</code>.</li>
+              <li><strong>Tách lô (Batch Tagging):</strong> Thêm nhãn <code>[Text 1]</code>, <code>[Text 2]</code> để hệ thống tự động xuất thành các file âm thanh riêng biệt trong cùng 1 lần chạy:
+                <pre><code>[Text 1] Xin chào các bạn.
+[Text 2] Đây là phân đoạn audio thứ hai.</code></pre>
+              </li>
+              <li><strong>Giọng đọc (Voice Pack):</strong> Chọn gói giọng mẫu từ danh sách bên trái hoặc bật chế độ <em>Tự do (Unconditioned)</em>.</li>
+              <li><strong>Thư mục dự án:</strong> Có thể đặt tên thư mục tuỳ chỉnh trong <em>Cấu hình xuất & Tách lô</em> (nếu để trống hệ thống sẽ tạo theo timestamp).</li>
+            </ul>
+          </div>
 
-          <h4>2. Phím tắt tiện ích</h4>
-          <p><kbd>Ctrl</kbd> + <kbd>Enter</kbd>: Bắt đầu tạo giọng nói.</p>
-          <p><kbd>Esc</kbd>: Dừng tiến trình.</p>
+          <!-- Section 2: Output -->
+          <div class="guide-section">
+            <h4>📤 2. Dữ liệu đầu ra (Output)</h4>
+            <ul class="guide-list">
+              <li><strong>Thư mục dự án:</strong> Toàn bộ kết quả được lưu tại <code>outputs/&lt;Tên_Dự_Án&gt;/</code>.</li>
+              <li><strong>Tệp phân đoạn:</strong> Các file audio lẻ tương ứng từng tag: <code>0001_Text_1.wav</code>, <code>0002_Text_2.wav</code>,...</li>
+              <li><strong>Tệp ghép nối (Auto-Merged):</strong> Tự động gộp tất cả các phân đoạn thành 1 tệp hoàn chỉnh theo định dạng chọn sẵn: <code>WAV</code>, <code>MP3 (320k/192k/128k)</code>, <code>FLAC</code>, <code>M4A</code>, <code>OGG</code>.</li>
+              <li><strong>Timeline & Metadata:</strong> Thông tin độ dài audio, thời gian sinh, tốc độ thời gian thực (RTF) và bảng chi tiết phân đoạn.</li>
+            </ul>
+          </div>
+
+          <!-- Section 3: Audio Waveform Interaction -->
+          <div class="guide-section">
+            <h4>🌊 3. Thao tác trên Sóng âm (Waveform)</h4>
+            <ul class="guide-list">
+              <li><strong>Click / Kéo chuột (Scrubbing):</strong> Tua nhanh trực tiếp đến bất kỳ vị trí nào trên sóng âm.</li>
+              <li><strong>Phóng to / Thu nhỏ:</strong> Sử dụng nút <kbd>+</kbd> / <kbd>−</kbd> hoặc giữ <kbd>Ctrl</kbd> + <em>Lăn chuột</em> trên sóng âm để zoom chi tiết (lên đến 16x).</li>
+              <li><strong>Nút ↺ (Đặt lại):</strong> Trở về mức thu phóng 1.0x ban đầu.</li>
+            </ul>
+          </div>
+
+          <!-- Section 4: Shortcuts -->
+          <div class="guide-section">
+            <h4>⌨️ 4. Phím tắt tiện ích</h4>
+            <ul class="guide-list">
+              <li><kbd>Ctrl</kbd> + <kbd>Enter</kbd>: Bắt đầu tạo giọng nói.</li>
+              <li><kbd>Esc</kbd>: Dừng quá trình đang sinh âm thanh.</li>
+            </ul>
+          </div>
         </div>
       </details>
     </aside>
 
   </main>
+
+  <!-- Fullscreen Mobile / Narrow Screen Warning Modal -->
+  <div id="mobileNoticeModal" class="mobile-notice-overlay">
+    <div class="mobile-notice-card warning-theme">
+      <div class="notice-icon warning-icon">⚠️</div>
+      <span class="notice-warning-badge">CẢNH BÁO TƯƠNG THÍCH</span>
+      <h2 class="notice-title">Giao diện chưa hỗ trợ Mobile</h2>
+      <p class="notice-desc">
+        <strong>ZeroTTS Studio Mod</strong> là bộ công cụ chuyên sâu với bảng điều khiển 3 cột và sóng âm tương tác, được tối ưu riêng cho máy tính.
+      </p>
+      <div class="notice-details text-center">
+        <p class="notice-center-text">
+          📱 Chế độ hiển thị trên điện thoại (Mobile Responsive) hiện <strong>chưa khả dụng</strong>.
+        </p>
+        <p class="notice-center-text">
+          🖥️ Vui lòng truy cập trên <strong>Laptop hoặc Máy tính</strong> (chiều rộng màn hình <strong>≥ 1050px</strong>) để có trải nghiệm tốt nhất.
+        </p>
+      </div>
+      <button id="dismissMobileNoticeBtn" class="btn btn-primary btn-dismiss-notice">
+        <span>Vẫn tiếp tục truy cập</span> →
+      </button>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

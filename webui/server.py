@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -76,6 +76,14 @@ class OpenFolderRequest(BaseModel):
 
 
 # ── Static & Frontend Routes ─────────────────────────────────────────────────
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def serve_favicon():
+    return Response(
+        content='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎙️</text></svg>',
+        media_type="image/svg+xml",
+    )
+
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
@@ -251,29 +259,34 @@ async def generate_tts(req: GenerateRequest):
                 yield f"event: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.01)
 
+            # Build completion payload safely
+            out_folder = result_container.get("folder_path", "")
+            if not out_folder or out_folder == engine.GENERATED_DIR:
+                default_folder = "__legacy__"
+            else:
+                default_folder = os.path.basename(out_folder)
+
+            folders = engine.list_generated_folders()
+            files = engine.get_folder_files(default_folder) if default_folder else []
+            default_file = last_file or (files[0]["path"] if files else "")
+            details = engine.parse_segment_details(out_folder, default_file)
+
+            final_payload = {
+                "status": "✅ Đã hoàn thành!",
+                "folder_path": out_folder,
+                "folder_name": default_folder,
+                "folders": folders,
+                "files": files,
+                "file_path": default_file,
+                "file_url": f"/api/audio-file?path={urllib.parse.quote(default_file)}" if default_file else None,
+                "file_name": os.path.basename(default_file) if default_file else "",
+                "details": details,
+            }
+            yield f"event: complete\ndata: {json.dumps(final_payload, ensure_ascii=False)}\n\n"
+
         except Exception as exc:
             yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
             return
-
-        out_folder = result_container.get("folder_path", "")
-        folders = engine.list_generated_folders()
-        default_folder = "__legacy__" if out_folder == engine.GENERATED_DIR else (folders[0]["folder_name"] if folders else "")
-        files = engine.get_folder_files(default_folder) if default_folder else []
-        default_file = last_file or (files[0]["path"] if files else "")
-        details = engine.parse_segment_details(out_folder, default_file)
-
-        final_payload = {
-            "status": "✅ Đã hoàn thành!",
-            "folder_path": out_folder,
-            "folder_name": default_folder,
-            "folders": folders,
-            "files": files,
-            "file_path": default_file,
-            "file_url": f"/api/audio-file?path={urllib.parse.quote(default_file)}" if default_file else None,
-            "file_name": os.path.basename(default_file) if default_file else "",
-            "details": details,
-        }
-        yield f"event: complete\ndata: {json.dumps(final_payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_generator(),

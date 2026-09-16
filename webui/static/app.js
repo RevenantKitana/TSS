@@ -42,9 +42,20 @@
   const progressBarFill = document.getElementById('progressBarFill');
 
   const mainAudioPlayer = document.getElementById('mainAudioPlayer');
+  const waveformCanvas = document.getElementById('waveformCanvas');
+  const waveformScrollContainer = document.getElementById('waveformScrollContainer');
+  const waveformZoomLevel = document.getElementById('waveformZoomLevel');
+  const zoomInWaveformBtn = document.getElementById('zoomInWaveformBtn');
+  const zoomOutWaveformBtn = document.getElementById('zoomOutWaveformBtn');
+  const zoomResetWaveformBtn = document.getElementById('zoomResetWaveformBtn');
   const currentAudioLabel = document.getElementById('currentAudioLabel');
-  const downloadAudioLink = document.getElementById('downloadAudioLink');
   const segmentsDetailsBox = document.getElementById('segmentsDetailsBox');
+  const progressStatusBox = document.getElementById('progressStatusBox');
+  const progressSpinner = document.getElementById('progressSpinner');
+  const generateSpinner = document.getElementById('generateSpinner');
+  const generateIcon = document.getElementById('generateIcon');
+  const generateLabel = document.getElementById('generateLabel');
+  const generateShortcut = document.getElementById('generateShortcut');
 
   const modeSelect = document.getElementById('modeSelect');
   const cfgSlider = document.getElementById('cfgSlider');
@@ -61,6 +72,11 @@
   const repVal = document.getElementById('repVal');
   const eoaSlider = document.getElementById('eoaSlider');
   const eoaVal = document.getElementById('eoaVal');
+
+  const advancedOptionsCard = document.getElementById('advancedOptionsCard');
+  const advancedLockBadge = document.getElementById('advancedLockBadge');
+  const advancedLockNotice = document.getElementById('advancedLockNotice');
+  const modeExplanationText = document.getElementById('modeExplanationText');
 
   const presetRadios = document.querySelectorAll('input[name="preset"]');
 
@@ -220,16 +236,22 @@
   if (refreshVoicesBtn) refreshVoicesBtn.addEventListener('click', loadVoices);
 
   // ── History & File Management ─────────────────────────────────────────────
-  async function loadHistoryFolders(preferredFolder = null) {
+  async function loadHistoryFolders(preferredFolder = null, triggerFileSelect = true) {
+    if (refreshHistoryBtn) refreshHistoryBtn.classList.add('spinning');
     try {
       const res = await fetch('/api/history/folders');
       const data = await res.json();
       const folders = data.folders || [];
 
+      const savedFolder = localStorage.getItem('zerotts_last_folder');
+      const targetFolder = preferredFolder || historyFolderSelect.value || savedFolder;
+
       historyFolderSelect.innerHTML = '';
       if (folders.length === 0) {
         historyFolderSelect.innerHTML = '<option value="">Chưa có dự án nào</option>';
         historyFileSelect.innerHTML = '<option value="">Chưa có file</option>';
+        setAudioPlayer(null, null);
+        segmentsDetailsBox.textContent = 'Chưa có dữ liệu phân đoạn.';
         return;
       }
 
@@ -240,21 +262,33 @@
         historyFolderSelect.appendChild(opt);
       });
 
-      if (preferredFolder && folders.some((f) => f.folder_name === preferredFolder)) {
-        historyFolderSelect.value = preferredFolder;
+      if (targetFolder && folders.some((f) => f.folder_name === targetFolder)) {
+        historyFolderSelect.value = targetFolder;
       }
 
-      await onFolderSelected();
+      if (triggerFileSelect) {
+        await onFolderSelected();
+      }
     } catch (err) {
       console.error('Failed to load history folders:', err);
+    } finally {
+      if (refreshHistoryBtn) {
+        setTimeout(() => refreshHistoryBtn.classList.remove('spinning'), 500);
+      }
     }
   }
 
-  async function onFolderSelected() {
+  async function onFolderSelected(preferredFile = null) {
     const folder = historyFolderSelect.value;
     lastActiveFolder = folder;
+    if (folder) {
+      localStorage.setItem('zerotts_last_folder', folder);
+    }
+
     if (!folder) {
       historyFileSelect.innerHTML = '<option value="">Chưa có file</option>';
+      setAudioPlayer(null, null);
+      segmentsDetailsBox.textContent = 'Chưa có dữ liệu phân đoạn.';
       return;
     }
 
@@ -263,9 +297,14 @@
       const data = await res.json();
       const files = data.files || [];
 
+      const savedFile = localStorage.getItem('zerotts_last_file');
+      const targetFile = preferredFile || historyFileSelect.value || savedFile;
+
       historyFileSelect.innerHTML = '';
       if (files.length === 0) {
         historyFileSelect.innerHTML = '<option value="">Thư mục trống</option>';
+        setAudioPlayer(null, null);
+        segmentsDetailsBox.textContent = 'Chưa có dữ liệu phân đoạn.';
         return;
       }
 
@@ -275,6 +314,10 @@
         opt.textContent = file.label;
         historyFileSelect.appendChild(opt);
       });
+
+      if (targetFile && files.some((f) => f.path === targetFile)) {
+        historyFileSelect.value = targetFile;
+      }
 
       await onFileSelected();
     } catch (err) {
@@ -292,37 +335,288 @@
       return;
     }
 
+    localStorage.setItem('zerotts_last_file', filePath);
+
     const fileName = filePath.split(/[/\\]/).pop();
     const fileUrl = `/api/audio-file?path=${encodeURIComponent(filePath)}`;
+    
+    // Immediately set audio and trigger waveform rendering without blocking UI
     setAudioPlayer(fileUrl, fileName);
 
-    // Fetch segment timeline details
-    try {
-      const res = await fetch(`/api/history/details?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(filePath)}`);
-      const data = await res.json();
-      segmentsDetailsBox.textContent = data.details || 'Không có chi tiết phân đoạn.';
-    } catch (err) {
-      console.error('Failed to load details:', err);
+    // Fetch segment timeline details concurrently in background
+    fetch(`/api/history/details?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(filePath)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        segmentsDetailsBox.textContent = data.details || 'Không có chi tiết phân đoạn.';
+      })
+      .catch((err) => {
+        console.error('Failed to load details:', err);
+      });
+  }
+
+  let audioCtx = null;
+  let currentWaveformUrl = null;
+  let currentAudioBuffer = null;
+  let currentPeaks = null;
+  let isScrubbingWaveform = false;
+  let currentZoom = 1.0;
+
+  const MIN_ZOOM = 1.0;
+  const MAX_ZOOM = 16.0;
+  const ZOOM_STEP = 1.4;
+
+  function updateWaveformDimensions() {
+    if (!waveformCanvas || !waveformScrollContainer) return;
+    const baseWidth = waveformScrollContainer.clientWidth || 600;
+    const targetWidth = Math.round(baseWidth * currentZoom);
+    waveformCanvas.width = targetWidth;
+    waveformCanvas.style.width = `${targetWidth}px`;
+    if (waveformZoomLevel) {
+      waveformZoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
     }
+  }
+
+  function computePeaks(audioBuffer, width) {
+    if (!audioBuffer || width <= 0) return null;
+    const channelData = audioBuffer.getChannelData(0);
+    const step = Math.ceil(channelData.length / width);
+    const peaks = new Array(width);
+
+    for (let i = 0; i < width; i++) {
+      let min = 1.0;
+      let max = -1.0;
+      const start = i * step;
+      const end = Math.min(start + step, channelData.length);
+
+      for (let j = start; j < end; j++) {
+        const val = channelData[j];
+        if (val < min) min = val;
+        if (val > max) max = val;
+      }
+
+      if (min > max) {
+        min = 0;
+        max = 0;
+      }
+
+      peaks[i] = { min, max };
+    }
+    return peaks;
+  }
+
+  function renderWaveform(progress = 0) {
+    if (!waveformCanvas || !currentPeaks) return;
+    const ctx = waveformCanvas.getContext('2d');
+    const width = waveformCanvas.width;
+    const height = waveformCanvas.height;
+    const amp = height / 2;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const playX = Math.floor(progress * width);
+
+    for (let i = 0; i < width; i++) {
+      const peak = currentPeaks[i];
+      if (!peak) continue;
+      const { min, max } = peak;
+      const y1 = (1 + min) * amp;
+      const y2 = (1 + max) * amp;
+      const h = Math.max(1, y2 - y1);
+
+      if (i <= playX) {
+        ctx.fillStyle = '#f4530c';
+      } else {
+        ctx.fillStyle = 'rgba(244, 83, 12, 0.32)';
+      }
+      ctx.fillRect(i, y1, 1, h);
+    }
+
+    if (progress > 0 && progress < 1) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(playX, 0, 1.5, height);
+    }
+  }
+
+  function applyZoom(newZoom, cursorClientX = null) {
+    const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, parseFloat(newZoom.toFixed(2))));
+    if (Math.abs(clampedZoom - currentZoom) < 0.01) return;
+
+    let cursorRatio = 0.5;
+    let cursorOffsetInContainer = (waveformScrollContainer ? waveformScrollContainer.clientWidth : 600) / 2;
+
+    if (waveformScrollContainer && cursorClientX !== null) {
+      const rect = waveformScrollContainer.getBoundingClientRect();
+      cursorOffsetInContainer = Math.max(0, Math.min(waveformScrollContainer.clientWidth, cursorClientX - rect.left));
+      const currentContentX = waveformScrollContainer.scrollLeft + cursorOffsetInContainer;
+      cursorRatio = currentContentX / (waveformCanvas.width || 1);
+    }
+
+    currentZoom = clampedZoom;
+    updateWaveformDimensions();
+
+    if (currentAudioBuffer) {
+      currentPeaks = computePeaks(currentAudioBuffer, waveformCanvas.width);
+      const currentProgress = (mainAudioPlayer.duration && !isNaN(mainAudioPlayer.duration))
+        ? mainAudioPlayer.currentTime / mainAudioPlayer.duration
+        : 0;
+      renderWaveform(currentProgress);
+    }
+
+    if (waveformScrollContainer) {
+      if (currentZoom > 1.0) {
+        const newContentX = cursorRatio * waveformCanvas.width;
+        waveformScrollContainer.scrollLeft = newContentX - cursorOffsetInContainer;
+      } else {
+        waveformScrollContainer.scrollLeft = 0;
+      }
+    }
+  }
+
+  async function drawWaveform(url) {
+    if (!waveformCanvas) return;
+    currentWaveformUrl = url;
+    currentAudioBuffer = null;
+    currentPeaks = null;
+
+    updateWaveformDimensions();
+    const ctx = waveformCanvas.getContext('2d');
+    ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+    if (!url) return;
+
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+      if (currentWaveformUrl !== url) return;
+
+      currentAudioBuffer = audioBuffer;
+      updateWaveformDimensions();
+      currentPeaks = computePeaks(currentAudioBuffer, waveformCanvas.width);
+
+      const initialProgress = (mainAudioPlayer.duration && !isNaN(mainAudioPlayer.duration))
+        ? mainAudioPlayer.currentTime / mainAudioPlayer.duration
+        : 0;
+      renderWaveform(initialProgress);
+    } catch (err) {
+      console.error('Error drawing waveform:', err);
+    }
+  }
+
+  function seekAudioFromWaveform(e) {
+    if (!mainAudioPlayer.duration || isNaN(mainAudioPlayer.duration)) return;
+    const rect = waveformCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
+    mainAudioPlayer.currentTime = ratio * mainAudioPlayer.duration;
+    renderWaveform(ratio);
+  }
+
+  if (zoomInWaveformBtn) zoomInWaveformBtn.addEventListener('click', () => applyZoom(currentZoom * ZOOM_STEP));
+  if (zoomOutWaveformBtn) zoomOutWaveformBtn.addEventListener('click', () => applyZoom(currentZoom / ZOOM_STEP));
+  if (zoomResetWaveformBtn) zoomResetWaveformBtn.addEventListener('click', () => applyZoom(1.0));
+
+  if (waveformScrollContainer) {
+    waveformScrollContainer.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.altKey) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+        applyZoom(currentZoom * factor, e.clientX);
+      }
+    }, { passive: false });
+  }
+
+  window.addEventListener('resize', () => {
+    if (currentAudioBuffer) {
+      updateWaveformDimensions();
+      currentPeaks = computePeaks(currentAudioBuffer, waveformCanvas.width);
+      const currentProgress = (mainAudioPlayer.duration && !isNaN(mainAudioPlayer.duration))
+        ? mainAudioPlayer.currentTime / mainAudioPlayer.duration
+        : 0;
+      renderWaveform(currentProgress);
+    }
+  });
+
+  if (waveformCanvas) {
+    waveformCanvas.addEventListener('click', seekAudioFromWaveform);
+    waveformCanvas.addEventListener('mousedown', (e) => {
+      isScrubbingWaveform = true;
+      seekAudioFromWaveform(e);
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (isScrubbingWaveform) {
+        seekAudioFromWaveform(e);
+      }
+    });
+    window.addEventListener('mouseup', () => {
+      if (isScrubbingWaveform) isScrubbingWaveform = false;
+    });
+  }
+
+  if (mainAudioPlayer) {
+    mainAudioPlayer.addEventListener('timeupdate', () => {
+      if (mainAudioPlayer.duration && !isNaN(mainAudioPlayer.duration)) {
+        const progress = mainAudioPlayer.currentTime / mainAudioPlayer.duration;
+        renderWaveform(progress);
+
+        if (currentZoom > 1.0 && waveformScrollContainer && !isScrubbingWaveform && !mainAudioPlayer.paused) {
+          const playX = progress * waveformCanvas.width;
+          const left = waveformScrollContainer.scrollLeft;
+          const viewWidth = waveformScrollContainer.clientWidth;
+          if (playX < left || playX > left + viewWidth - 60) {
+            waveformScrollContainer.scrollLeft = playX - viewWidth / 3;
+          }
+        }
+      }
+    });
+    mainAudioPlayer.addEventListener('ended', () => {
+      renderWaveform(0);
+      if (waveformScrollContainer) waveformScrollContainer.scrollLeft = 0;
+    });
   }
 
   function setAudioPlayer(url, label) {
     if (url) {
       mainAudioPlayer.src = url;
       currentAudioLabel.textContent = `🎵 ${label || 'Bản thu'}`;
-      downloadAudioLink.href = url;
-      downloadAudioLink.download = label || 'output.wav';
-      downloadAudioLink.style.display = 'inline-block';
+      drawWaveform(url);
     } else {
       mainAudioPlayer.src = '';
       currentAudioLabel.textContent = '🎵 Chưa có bản thu nào';
-      downloadAudioLink.style.display = 'none';
+      drawWaveform(null);
     }
   }
 
-  historyFolderSelect.addEventListener('change', onFolderSelected);
+  historyFolderSelect.addEventListener('change', () => onFolderSelected());
+  historyFolderSelect.addEventListener('input', () => onFolderSelected());
+  historyFolderSelect.addEventListener('focus', () => {
+    // Light background sync without changing user selection
+    fetch('/api/history/folders')
+      .then((res) => res.json())
+      .then((data) => {
+        const folders = data.folders || [];
+        const cur = historyFolderSelect.value;
+        if (folders.length > 0 && folders.length !== historyFolderSelect.options.length) {
+          loadHistoryFolders(cur, false);
+        }
+      })
+      .catch(() => {});
+  });
+
   historyFileSelect.addEventListener('change', onFileSelected);
-  if (refreshHistoryBtn) refreshHistoryBtn.addEventListener('click', () => loadHistoryFolders(historyFolderSelect.value));
+  historyFileSelect.addEventListener('input', onFileSelected);
+  if (refreshHistoryBtn) {
+    refreshHistoryBtn.addEventListener('click', () => loadHistoryFolders(historyFolderSelect.value, true));
+  }
+
+  window.addEventListener('focus', () => {
+    if (generateBtn && !generateBtn.disabled) {
+      loadHistoryFolders(historyFolderSelect.value, false);
+    }
+  });
 
   // ── Folder & Audio Actions ────────────────────────────────────────────────
   if (concatBtn) {
@@ -391,6 +685,22 @@
     openOutputFolderBtn.addEventListener('click', () => openFolder(lastActiveFolder || historyFolderSelect.value));
   }
 
+  // ── Mode Explanation & Presets ───────────────────────────────────────────
+  const MODE_EXPLANATIONS = {
+    voice: '<strong>Gói giọng (Voice Pack):</strong> Bắt chước âm sắc, phong cách và ngữ điệu từ tệp âm thanh mẫu của gói giọng được chọn.',
+    uncond: '<strong>Tự do (Unconditioned):</strong> Mô hình tự do sáng tạo giọng đọc ngẫu nhiên trực tiếp từ văn bản mà không bị ràng buộc vào file mẫu (tốc độ xử lý nhanh hơn, chất giọng biến thiên phong phú).',
+  };
+
+  function updateModeExplanation() {
+    if (modeExplanationText && modeSelect && MODE_EXPLANATIONS[modeSelect.value]) {
+      modeExplanationText.innerHTML = MODE_EXPLANATIONS[modeSelect.value];
+    }
+  }
+
+  if (modeSelect) {
+    modeSelect.addEventListener('change', updateModeExplanation);
+  }
+
   // ── Sliders & Presets ─────────────────────────────────────────────────────
   function bindSlider(slider, display, suffix = '') {
     slider.addEventListener('input', () => {
@@ -406,38 +716,115 @@
   bindSlider(repSlider, repVal);
   bindSlider(eoaSlider, eoaVal);
 
+  const advancedControls = [
+    modeSelect,
+    cfgSlider,
+    chunkSecSlider,
+    tempSlider,
+    topkSlider,
+    toppSlider,
+    repSlider,
+    eoaSlider,
+  ];
+
+  function setAdvancedLocked(isLocked) {
+    advancedControls.forEach((el) => {
+      if (el) el.disabled = isLocked;
+    });
+
+    if (advancedOptionsCard) {
+      advancedOptionsCard.classList.toggle('is-locked', isLocked);
+    }
+
+    if (advancedLockBadge) {
+      if (isLocked) {
+        advancedLockBadge.className = 'badge-lock locked';
+        advancedLockBadge.textContent = '🔒 Khóa theo Preset';
+      } else {
+        advancedLockBadge.className = 'badge-lock unlocked';
+        advancedLockBadge.textContent = '🔓 Đang tùy chỉnh';
+      }
+    }
+
+    if (advancedLockNotice) {
+      if (isLocked) {
+        advancedLockNotice.innerHTML = '<span>🔒 Các tham số đang khóa tự động theo Preset. <button type="button" id="switchToCustomBtn" class="notice-link-btn">Bật chế độ Tùy chỉnh 🛠️</button></span>';
+        const switchBtn = document.getElementById('switchToCustomBtn');
+        if (switchBtn) {
+          switchBtn.addEventListener('click', activateCustomPreset);
+        }
+      } else {
+        advancedLockNotice.innerHTML = '<span>✨ <strong>Chế độ Tùy chỉnh:</strong> Mở khóa toàn bộ tham số. Bạn có thể tự do điều chỉnh thanh trượt theo ý muốn.</span>';
+      }
+    }
+  }
+
+  function activateCustomPreset() {
+    const customRadio = document.querySelector('input[name="preset"][value="custom"]');
+    if (customRadio) {
+      customRadio.checked = true;
+      document.querySelectorAll('.preset-pill').forEach((p) => p.classList.remove('active'));
+      const pill = customRadio.closest('.preset-pill');
+      if (pill) pill.classList.add('active');
+      setAdvancedLocked(false);
+    }
+  }
+
   presetRadios.forEach((radio) => {
     radio.addEventListener('change', () => {
       document.querySelectorAll('.preset-pill').forEach((p) => p.classList.remove('active'));
-      radio.closest('.preset-pill').classList.add('active');
+      const pill = radio.closest('.preset-pill');
+      if (pill) pill.classList.add('active');
 
-      const preset = PRESETS[radio.value];
-      if (preset) {
-        cfgSlider.value = preset.cfg;
-        cfgVal.textContent = preset.cfg.toFixed(1);
+      if (radio.value === 'custom') {
+        setAdvancedLocked(false);
+      } else {
+        const preset = PRESETS[radio.value];
+        if (preset) {
+          cfgSlider.value = preset.cfg;
+          cfgVal.textContent = preset.cfg.toFixed(1);
 
-        tempSlider.value = preset.temp;
-        tempVal.textContent = preset.temp.toFixed(2);
+          tempSlider.value = preset.temp;
+          tempVal.textContent = preset.temp.toFixed(2);
 
-        topkSlider.value = preset.topk;
-        topkVal.textContent = preset.topk;
+          topkSlider.value = preset.topk;
+          topkVal.textContent = preset.topk;
 
-        toppSlider.value = preset.topp;
-        toppVal.textContent = preset.topp.toFixed(2);
+          toppSlider.value = preset.topp;
+          toppVal.textContent = preset.topp.toFixed(2);
 
-        repSlider.value = preset.rep;
-        repVal.textContent = preset.rep.toFixed(2);
+          repSlider.value = preset.rep;
+          repVal.textContent = preset.rep.toFixed(2);
+        }
+        setAdvancedLocked(true);
       }
     });
   });
 
   // ── Synthesis & SSE Streaming Engine ──────────────────────────────────────
-  function setGeneratingState(isBusy) {
+  function setGeneratingState(isBusy, customText = null, customType = 'busy') {
     generateBtn.disabled = isBusy;
     stopBtn.disabled = !isBusy;
+
+    if (generateSpinner) generateSpinner.style.display = isBusy ? 'inline-block' : 'none';
+    if (generateIcon) generateIcon.style.display = isBusy ? 'none' : 'inline';
+    if (generateShortcut) generateShortcut.style.display = isBusy ? 'none' : 'inline-block';
+    if (generateLabel) generateLabel.textContent = isBusy ? (customText || 'Đang tạo...') : 'Tạo giọng nói';
+
+    if (progressSpinner) progressSpinner.style.display = isBusy ? 'inline-block' : 'none';
+    if (progressStatusBox) progressStatusBox.classList.toggle('is-active', isBusy);
+
     if (isBusy) {
-      systemStatus.className = 'status-pill status-busy';
-      systemStatusText.textContent = 'Đang tạo...';
+      if (customType === 'loading') {
+        systemStatus.className = 'status-pill status-loading';
+        systemStatusText.textContent = customText || 'Đang nạp mô hình...';
+      } else if (customType === 'merging') {
+        systemStatus.className = 'status-pill status-merging';
+        systemStatusText.textContent = customText || 'Đang ghép file...';
+      } else {
+        systemStatus.className = 'status-pill status-busy';
+        systemStatusText.textContent = customText || 'Đang tạo...';
+      }
       progressBarFill.classList.add('active');
       progressBarFill.style.width = '100%';
     } else {
@@ -461,7 +848,7 @@
       return;
     }
 
-    setGeneratingState(true);
+    setGeneratingState(true, 'Đang khởi tạo...', 'loading');
     progressMessage.textContent = '⏳ Khởi động quá trình tạo giọng nói...';
     segmentsDetailsBox.textContent = 'Đang phân đoạn câu...';
 
@@ -501,32 +888,42 @@
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
 
+      function processSSEBlock(block) {
+        if (!block.trim()) return;
+        let eventType = 'message';
+        let dataStr = '';
+
+        block.split('\n').forEach((line) => {
+          if (line.startsWith('event:')) eventType = line.substring(6).trim();
+          else if (line.startsWith('data:')) dataStr = line.substring(5).trim();
+        });
+
+        if (!dataStr) return;
+
+        try {
+          const data = JSON.parse(dataStr);
+          handleSSEEvent(eventType, data);
+        } catch (e) {
+          console.error('SSE JSON parse error:', e, dataStr);
+        }
+      }
+
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          if (buffer.trim()) {
+            buffer.split('\n\n').forEach(processSSEBlock);
+            buffer = '';
+          }
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
         buffer = lines.pop(); // Keep partial tail
 
         for (const block of lines) {
-          if (!block.trim()) continue;
-          let eventType = 'message';
-          let dataStr = '';
-
-          block.split('\n').forEach((line) => {
-            if (line.startsWith('event:')) eventType = line.substring(6).trim();
-            else if (line.startsWith('data:')) dataStr = line.substring(5).trim();
-          });
-
-          if (!dataStr) continue;
-
-          try {
-            const data = JSON.parse(dataStr);
-            handleSSEEvent(eventType, data);
-          } catch (e) {
-            console.error('SSE JSON parse error:', e, dataStr);
-          }
+          processSSEBlock(block);
         }
       }
     } catch (err) {
@@ -544,14 +941,26 @@
 
   function handleSSEEvent(type, data) {
     if (type === 'start') {
+      setGeneratingState(true, 'Đang nạp mô hình...', 'loading');
       progressMessage.textContent = '🎙️ Bắt đầu sinh âm thanh...';
     } else if (type === 'progress') {
-      if (data.status) progressMessage.textContent = data.status;
+      if (data.status) {
+        progressMessage.textContent = data.status;
+        const statusLower = data.status.toLowerCase();
+        if (statusLower.includes('xong') || statusLower.includes('hoàn thành') || statusLower.includes('hoàn tất')) {
+          setGeneratingState(false);
+        } else if (statusLower.includes('nối') || statusLower.includes('ghép') || statusLower.includes('merge')) {
+          setGeneratingState(true, 'Đang ghép file...', 'merging');
+        } else {
+          setGeneratingState(true, 'Đang sinh audio...', 'busy');
+        }
+      }
       if (data.segments) segmentsDetailsBox.textContent = data.segments;
       if (data.file_url) {
         setAudioPlayer(data.file_url, data.file_name);
       }
     } else if (type === 'complete') {
+      setGeneratingState(false);
       progressMessage.textContent = '✅ Đã hoàn thành!';
       if (data.file_url) {
         setAudioPlayer(data.file_url, data.file_name);
@@ -565,6 +974,7 @@
         loadHistoryFolders(data.folder_name);
       }
     } else if (type === 'error') {
+      setGeneratingState(false);
       progressMessage.textContent = `❌ Lỗi: ${data.error}`;
     }
   }
@@ -572,11 +982,17 @@
   function stopGeneration() {
     if (abortController) {
       abortController.abort();
+      abortController = null;
     }
+    setGeneratingState(false);
   }
 
-  generateBtn.addEventListener('click', startGeneration);
-  stopBtn.addEventListener('click', stopGeneration);
+  generateBtn.addEventListener('click', () => {
+    if (!generateBtn.disabled) startGeneration();
+  });
+  stopBtn.addEventListener('click', () => {
+    if (!stopBtn.disabled) stopGeneration();
+  });
 
   // ── Keyboard Shortcuts ────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => {
@@ -587,6 +1003,52 @@
       if (!stopBtn.disabled) stopGeneration();
     }
   });
+
+  // ── Mobile Notice Modal Trolling Easter Egg ──────────────────────────────
+  const mobileNoticeModal = document.getElementById('mobileNoticeModal');
+  const dismissMobileNoticeBtn = document.getElementById('dismissMobileNoticeBtn');
+
+  const TROLL_MESSAGES = [
+    'Bấm trúng đi đã 😜',
+    'Đã bảo dùng máy tính mà! 💻',
+    'Hụt rồi nha! 🏃‍♂️💨',
+    'Không tắt được đâu! 😂',
+    'Cố lên nào... đùa đấy 🤣',
+    'Mở laptop lên bạn ơi! 🖥️',
+    'Nhanh tay hơn nữa xem! ⚡',
+    'Ủa tưởng dễ bấm lắm à? 🤭',
+  ];
+
+  let trollIndex = 0;
+
+  function dodgeDismissButton(e) {
+    if (!dismissMobileNoticeBtn) return;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    const maxOffsetX = 120;
+    const maxOffsetY = 80;
+    const randX = (Math.random() * 2 - 1) * maxOffsetX;
+    const randY = (Math.random() * 2 - 1) * maxOffsetY;
+
+    dismissMobileNoticeBtn.style.transform = `translate(${randX.toFixed(0)}px, ${randY.toFixed(0)}px)`;
+
+    trollIndex = (trollIndex + 1) % TROLL_MESSAGES.length;
+    dismissMobileNoticeBtn.innerHTML = `<span>${TROLL_MESSAGES[trollIndex]}</span>`;
+
+    if (navigator.vibrate) {
+      try { navigator.vibrate(40); } catch (_) {}
+    }
+  }
+
+  if (dismissMobileNoticeBtn) {
+    dismissMobileNoticeBtn.addEventListener('mouseenter', dodgeDismissButton);
+    dismissMobileNoticeBtn.addEventListener('touchstart', dodgeDismissButton, { passive: false });
+    dismissMobileNoticeBtn.addEventListener('pointerdown', dodgeDismissButton);
+    dismissMobileNoticeBtn.addEventListener('click', dodgeDismissButton);
+  }
 
   // ── Initial Boot ──────────────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
@@ -599,5 +1061,13 @@
 
     loadVoices();
     loadHistoryFolders();
+    updateModeExplanation();
+
+    const selectedPresetRadio = document.querySelector('input[name="preset"]:checked');
+    if (selectedPresetRadio) {
+      setAdvancedLocked(selectedPresetRadio.value !== 'custom');
+    } else {
+      setAdvancedLocked(true);
+    }
   });
 })();
