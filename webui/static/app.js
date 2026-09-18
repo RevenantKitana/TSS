@@ -25,6 +25,7 @@
 
   const mainTextInput = document.getElementById('mainTextInput');
   const charCount = document.getElementById('charCount');
+  const insertPauseBtn = document.getElementById('insertPauseBtn');
   const insertTagBtn = document.getElementById('insertTagBtn');
   const clearTextBtn = document.getElementById('clearTextBtn');
   const sampleTextBtn = document.getElementById('sampleTextBtn');
@@ -91,9 +92,9 @@
     speed: { cfg: 1.0, temp: 0.7, topk: 20, topp: 0.9, rep: 1.15 },
   };
 
-  const SAMPLE_TEXT = `[Text 1] Xin chào tất cả mọi người! Chào mừng các bạn đã đến với ZeroTTS Bản Mod.
-[Text 2] Hệ thống này hỗ trợ tạo giọng đọc tiếng Việt mượt mà với tốc độ cực nhanh ngay trên CPU.
-[Text 3] Bạn có thể chia đoạn linh hoạt và ghép nối tự động thành tệp âm thanh hoàn chỉnh.`;
+  const SAMPLE_TEXT = `[Text 1] Xin chào tất cả mọi người! [pause: 1.5s] Chào mừng các bạn đã đến với ZeroTTS.
+[Text 2] Hệ thống này hỗ trợ tạo giọng đọc tiếng Việt mượt mà với tốc độ cực nhanh ngay trên CPU. [pause: 1s]
+[Text 3] Bạn có thể chèn [pause: 2s] để ngắt nghỉ tùy ý và ghép nối tự động thành tệp âm thanh hoàn chỉnh.`;
 
   // ── Theme Management ──────────────────────────────────────────────────────
   function initTheme() {
@@ -141,6 +142,22 @@
       mainTextInput.value = SAMPLE_TEXT;
       updateCharCount();
       mainTextInput.focus();
+    });
+  }
+
+  if (insertPauseBtn) {
+    insertPauseBtn.addEventListener('click', () => {
+      const val = mainTextInput.value;
+      const tagToInsert = ' [pause: 1.5s] ';
+      const start = mainTextInput.selectionStart;
+      const end = mainTextInput.selectionEnd;
+      const textBefore = val.substring(0, start);
+      const textAfter = val.substring(end);
+      
+      mainTextInput.value = textBefore + tagToInsert + textAfter;
+      mainTextInput.selectionStart = mainTextInput.selectionEnd = start + tagToInsert.length;
+      mainTextInput.focus();
+      updateCharCount();
     });
   }
 

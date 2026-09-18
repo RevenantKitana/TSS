@@ -119,6 +119,7 @@
             <h2>Soạn thảo văn bản</h2>
           </div>
           <div class="editor-tools">
+            <button id="insertPauseBtn" class="btn-text" title="Chèn thẻ tạm dừng nghỉ [pause: 1.5s]">⏸️ + Nghỉ [pause: 1.5s]</button>
             <button id="insertTagBtn" class="btn-text" title="Chèn thẻ phân đoạn Batch [Text 1]">+ Thẻ [Text n]</button>
             <button id="clearTextBtn" class="btn-text" title="Xoá toàn bộ nội dung">Xoá</button>
             <button id="sampleTextBtn" class="btn-text" title="Chèn văn bản mẫu">Mẫu</button>
@@ -126,9 +127,9 @@
         </div>
 
         <div class="textarea-container">
-          <textarea id="mainTextInput" class="main-textarea" rows="8" placeholder="Nhập văn bản tiếng Việt… (Sử dụng nhãn [Text 1], [Text 2] để tách thành nhiều file audio riêng biệt)">Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS.</textarea>
+          <textarea id="mainTextInput" class="main-textarea" rows="8" placeholder="Nhập văn bản tiếng Việt… (Dùng [pause: 2s] để tạm dừng, dùng [Text 1] để tách file audio riêng biệt)">Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS.</textarea>
           <div class="textarea-footer">
-            <span class="hint-text">💡 Dùng nhãn <code>[Text 1]</code> để tạo nhiều file audio trong 1 lần chạy</span>
+            <span class="hint-text">💡 Dùng <code>[pause: 2s]</code> để dừng nghỉ · Dùng <code>[Text 1]</code> để tách nhiều file audio</span>
             <span id="charCount" class="char-count">65 / 5000</span>
           </div>
         </div>

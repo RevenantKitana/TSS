@@ -7,6 +7,7 @@
     tts.save_audio(audio, "out.wav")
 """
 
+from .chunking import extract_pause_segments
 from .hub import DEFAULT_REPO_ID, resolve_model_dir
 from .synthesizer import ZeroTTS
 from .text_norm import normalize_vi_text
@@ -17,6 +18,7 @@ __version__ = "0.1.2"
 __all__ = [
     "ZeroTTS",
     "normalize_vi_text",
+    "extract_pause_segments",
     "Voice",
     "list_voices",
     "load_voice",

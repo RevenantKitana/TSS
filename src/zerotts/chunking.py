@@ -268,3 +268,57 @@ def load_text_samples(path) -> dict[str, str]:
             lines.append(raw_line)
     flush()
     return samples
+
+
+# ── pause markdown parser ───────────────────────────────────────────────────
+
+_PAUSE_TAG_RE = re.compile(
+    r"(?:\[(?:pause|wait|delay|stop):\s*(\d+(?:\.\d+)?)\s*(s|ms)\]"
+    r"|<(?:pause:\s*)?(\d+(?:\.\d+)?)\s*(s|ms)>"
+    r"|<break\s+time=[\"'](\d+(?:\.\d+)?)(s|ms)[\"']\s*/?>)",
+    re.IGNORECASE,
+)
+
+
+def extract_pause_segments(text: str) -> list[dict]:
+    """Split text into alternating speech and pause segments.
+
+    Recognizes:
+      - `[pause: 2s]`, `[pause: 500ms]`, `[wait: 1.5s]`, `[delay: 3s]`
+      - `<2s>`, `<500ms>`, `<pause: 2s>`
+      - `<break time="2s"/>`, `<break time="500ms"/>`
+
+    Returns a list of dicts:
+      - `{"type": "speech", "text": "..."}`
+      - `{"type": "pause", "duration_sec": 2.0, "raw_tag": "[pause: 2s]"}`
+    """
+    if not text or not text.strip():
+        return []
+
+    segments: list[dict] = []
+    last_idx = 0
+
+    for m in _PAUSE_TAG_RE.finditer(text):
+        start, end = m.span()
+        before = text[last_idx:start]
+        if before.strip():
+            segments.append({"type": "speech", "text": before.strip()})
+
+        val_str = m.group(1) or m.group(3) or m.group(5)
+        unit = (m.group(2) or m.group(4) or m.group(6) or "s").lower()
+        val = float(val_str)
+        dur_sec = val / 1000.0 if unit == "ms" else val
+
+        segments.append({
+            "type": "pause",
+            "duration_sec": max(0.0, dur_sec),
+            "raw_tag": m.group(0),
+        })
+        last_idx = end
+
+    remaining = text[last_idx:]
+    if remaining.strip():
+        segments.append({"type": "speech", "text": remaining.strip()})
+
+    return segments
+

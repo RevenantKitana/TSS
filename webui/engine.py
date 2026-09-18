@@ -19,6 +19,7 @@ from zerotts import ZeroTTS
 from zerotts.chunking import (
     chunk_text,
     clean_segment_punctuation,
+    extract_pause_segments,
     load_text_samples,
     normalize_punctuation,
 )
@@ -224,25 +225,47 @@ def get_sample_texts() -> dict:
     return load_text_samples(SAMPLE_TEXTS_PATH)
 
 
-def get_text_segments(text: str, max_chunk_sec: float = 15.0,
-                      normalize_numbers: bool = True) -> list:
-    """Exactly the segments generate_stream will synthesize, after Vietnamese
-    text normalization, chunking and per-segment punctuation cleanup — exposed
-    so the UI can show what will actually be spoken before generation starts.
+def get_generation_plan(text: str, max_chunk_sec: float = 15.0,
+                        normalize_numbers: bool = True) -> list[dict]:
+    """Split input text into an execution plan of speech segments and pauses.
 
-    ``normalize_numbers`` runs zerotts.text_norm.normalize_vi_text first,
-    turning dates, clock times, versions, fractions, acronyms and numbers into
-    spoken Vietnamese. It runs BEFORE chunking because an expansion is several
-    times longer than what it replaces, and the chunk budget has to size the
-    text the model actually receives.
-
-    Turn it off for non-Vietnamese text: the expansions are Vietnamese words, so
-    "3/4" in an English sentence would come out "ba trên bốn".
+    Returns a list of dicts:
+      - {"type": "speech", "text": "Normalized spoken sentence."}
+      - {"type": "pause", "duration_sec": 2.0, "raw_tag": "[pause: 2s]"}
     """
-    if normalize_numbers:
-        text = normalize_vi_text(text)
-    raw = chunk_text(normalize_punctuation(text), max_chunk_sec=max_chunk_sec)
-    return [c for c in (clean_segment_punctuation(x) for x in raw) if c]
+    pause_items = extract_pause_segments(text)
+    if not pause_items:
+        pause_items = [{"type": "speech", "text": text}]
+
+    plan: list[dict] = []
+    for item in pause_items:
+        if item["type"] == "pause":
+            plan.append(item)
+        elif item["type"] == "speech":
+            txt = item["text"]
+            if normalize_numbers:
+                txt = normalize_vi_text(txt)
+            raw = chunk_text(normalize_punctuation(txt), max_chunk_sec=max_chunk_sec)
+            for s in raw:
+                cleaned = clean_segment_punctuation(s)
+                if cleaned:
+                    plan.append({"type": "speech", "text": cleaned})
+    return plan
+
+
+def get_text_segments(text: str, max_chunk_sec: float = 15.0,
+                      normalize_numbers: bool = True) -> list[str]:
+    """Human-readable preview of segments and pause markers for the UI."""
+    plan = get_generation_plan(text, max_chunk_sec=max_chunk_sec,
+                               normalize_numbers=normalize_numbers)
+    out: list[str] = []
+    for it in plan:
+        if it["type"] == "speech":
+            out.append(it["text"])
+        elif it["type"] == "pause":
+            dur = it.get("duration_sec", 0.0)
+            out.append(f"⏸️ [Tạm dừng {dur:.2g}s]")
+    return out
 
 
 # ── generation ───────────────────────────────────────────────────────────────
@@ -269,21 +292,6 @@ def generate_stream(
     The text is punctuation-normalized and sentence-chunked into segments, and
     each segment is its own generate call — the architecture re-primes the
     global transformer's [voice | soa] prefix fresh per call.
-
-    But the CODEC is a single continuous streaming session shared across ALL
-    segments: one streaming decoder is opened up front and every segment's frames
-    go through it, so the causal audio decoder's KV cache never resets and there
-    is no cold-start discontinuity at a segment boundary. Getting this wrong —
-    one decoder per segment — is audible as a click between segments.
-
-    The chunk-size ramp (1, 2, 4 … frames per decode call) only buys
-    time-to-first-audio, which only matters once, so it applies to the first
-    segment only; later segments decode straight at ``max_chunk_frames``.
-
-    On completion (including when the caller stops iterating early) the full
-    audio is saved under GENERATED_DIR; pass a ``result`` dict to read back
-    "path" and "n_samples" afterwards, since a generator cannot return a value
-    through a plain for-loop.
     """
     if not text or not text.strip():
         raise ValueError("Please enter some text to synthesize.")
@@ -297,12 +305,10 @@ def generate_stream(
             raise ValueError("Please select a voice first.")
         voice_emb = tts.resolve_voice(voice_name)
     else:
-        # Guiding away from the unconditional branch when the conditional branch
-        # IS the unconditional branch is a no-op that costs twice as much.
         cfg_scale = 1.0
 
-    segments = get_text_segments(text, max_chunk_sec=max_chunk_sec,
-                                 normalize_numbers=normalize_numbers)
+    plan = get_generation_plan(text, max_chunk_sec=max_chunk_sec,
+                               normalize_numbers=normalize_numbers)
     silence_frame = _get_silence_frame(tts)
 
     stream = tts.codec.streaming_decoder()
@@ -314,9 +320,34 @@ def generate_stream(
         all_chunks.append(arr)
         return np.clip(arr * 32767.0, -32768, 32767).astype(np.int16)
 
+    def _emit_pause_silence(duration_sec: float):
+        if duration_sec <= 0:
+            return
+        if silence_frame is not None:
+            n_frames = max(1, int(round(duration_sec * 12.5)))
+            for i in range(0, n_frames, max_chunk_frames):
+                batch_len = min(max_chunk_frames, n_frames - i)
+                chunk = _emit([silence_frame] * batch_len)
+                yield tts.sample_rate, chunk
+        else:
+            n_samples = int(round(duration_sec * tts.sample_rate))
+            if n_samples > 0:
+                silence_arr = np.zeros(n_samples, dtype=np.float32)
+                all_chunks.append(silence_arr)
+                chunk_int16 = np.zeros(n_samples, dtype=np.int16)
+                yield tts.sample_rate, chunk_int16
+
     try:
-        for seg_idx, segment in enumerate(segments):
-            target = 1 if seg_idx == 0 else max_chunk_frames  # ramp on the first only
+        speech_idx = 0
+        for item in plan:
+            if item["type"] == "pause":
+                for sr, chunk in _emit_pause_silence(item["duration_sec"]):
+                    yield sr, chunk
+                continue
+
+            segment = item["text"]
+            target = 1 if speech_idx == 0 else max_chunk_frames  # ramp on the first only
+            speech_idx += 1
             buf: list = []
             for frame_codes in tts._generate_frames(
                 segment, min_frames, max_frames,
@@ -330,7 +361,7 @@ def generate_stream(
                 if len(buf) >= target:
                     chunk = _emit(buf)
                     buf = []
-                    if seg_idx == 0:
+                    if speech_idx == 1:
                         target = min(max_chunk_frames, target * 2)
                     yield tts.sample_rate, chunk
             if buf:
@@ -344,7 +375,7 @@ def generate_stream(
         tag = voice_name if use_voice else "uncond"
         out_path = os.path.join(GENERATED_DIR, f"{ts}_{tag or 'uncond'}.wav")
         sf.write(out_path, full, tts.sample_rate, subtype="PCM_16")
-        with open(out_path + ".json", "w") as f:
+        with open(out_path + ".json", "w", encoding="utf-8") as f:
             json.dump({"voice": voice_name if use_voice else None,
                        "cfg_scale": cfg_scale,
                        "text": text.strip().replace("\n", " ")[:200],
@@ -889,16 +920,35 @@ def generate_batch_stream(
             })
             continue
 
-        segments = get_text_segments(block_text, max_chunk_sec=max_chunk_sec)
-        segments_text = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(segments))
+        plan = get_generation_plan(block_text, max_chunk_sec=max_chunk_sec)
+        segments_preview = get_text_segments(block_text, max_chunk_sec=max_chunk_sec)
+        segments_text = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(segments_preview))
 
         yield f"Đang tạo [{idx}/{len(blocks)}] ({raw_tag})...", None, segments_text
 
         stream = tts.codec.streaming_decoder()
         all_chunks = []
         try:
-            for seg_idx, segment in enumerate(segments):
-                target = 1 if seg_idx == 0 else 16
+            speech_idx = 0
+            for item in plan:
+                if item["type"] == "pause":
+                    dur = item["duration_sec"]
+                    if dur > 0:
+                        if silence_frame is not None:
+                            n_frames = max(1, int(round(dur * 12.5)))
+                            codes = np.stack([silence_frame] * n_frames, axis=-1)
+                            arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                            all_chunks.append(arr)
+                        else:
+                            n_samples = int(round(dur * tts.sample_rate))
+                            if n_samples > 0:
+                                all_chunks.append(np.zeros(n_samples, dtype=np.float32))
+                        yield f"Đang tạo [{idx}/{len(blocks)}] ({raw_tag}) [Tạm dừng {dur:.2g}s]...", None, segments_text
+                    continue
+
+                segment = item["text"]
+                target = 1 if speech_idx == 0 else 16
+                speech_idx += 1
                 buf = []
                 for frame_codes in tts._generate_frames(
                     segment, min_frames=4, max_frames=1500,
@@ -913,7 +963,7 @@ def generate_batch_stream(
                         arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
                         all_chunks.append(arr)
                         buf = []
-                        if seg_idx == 0:
+                        if speech_idx == 1:
                             target = min(16, target * 2)
                         yield f"Đang tạo [{idx}/{len(blocks)}] ({raw_tag})...", None, segments_text
                 if buf:
