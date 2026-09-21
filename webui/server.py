@@ -193,6 +193,39 @@ async def api_concat(req: ConcatRequest):
     }
 
 
+# ── Safe Generator Helper for ThreadPoolExecutor ────────────────────────────
+_GEN_FINISHED = object()
+
+
+def _safe_generator_next(gen):
+    """Safely fetch next item from a generator in a ThreadPoolExecutor.
+    
+    Prevents StopIteration from bubbling up into asyncio.Future, which triggers:
+    TypeError: StopIteration interacts badly with generators and cannot be raised into a Future
+    """
+    try:
+        return next(gen)
+    except StopIteration:
+        return _GEN_FINISHED
+
+
+# Fix Windows Proactor ConnectionResetError (WinError 10054) on abrupt client disconnect
+if sys.platform == "win32":
+    def _win32_exception_handler(loop, context):
+        exc = context.get("exception")
+        if isinstance(exc, ConnectionResetError) and getattr(exc, "winerror", None) == 10054:
+            return  # Suppress harmless client disconnect error on Windows
+        loop.default_exception_handler(context)
+
+    @app.on_event("startup")
+    async def _setup_win32_exception_handler():
+        try:
+            loop = asyncio.get_running_loop()
+            loop.set_exception_handler(_win32_exception_handler)
+        except Exception:
+            pass
+
+
 # ── Server-Sent Events (SSE) Generation Endpoint ─────────────────────────────
 
 @app.post("/api/generate")
@@ -234,15 +267,14 @@ async def generate_tts(req: GenerateRequest):
                 result=result_container,
             )
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop() if hasattr(asyncio, "get_running_loop") else asyncio.get_event_loop()
         gen = _sync_generator()
 
         try:
             while True:
-                # Run generator step in threadpool so we don't block the async event loop
-                try:
-                    item = await loop.run_in_executor(None, lambda: next(gen))
-                except StopIteration:
+                # Run generator step safely in threadpool
+                item = await loop.run_in_executor(None, _safe_generator_next, gen)
+                if item is _GEN_FINISHED:
                     break
 
                 status_msg, completed_file, segs_text = item
@@ -284,6 +316,8 @@ async def generate_tts(req: GenerateRequest):
             }
             yield f"event: complete\ndata: {json.dumps(final_payload, ensure_ascii=False)}\n\n"
 
+        except asyncio.CancelledError:
+            return
         except Exception as exc:
             yield f"event: error\ndata: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
             return
