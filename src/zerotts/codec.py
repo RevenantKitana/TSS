@@ -65,7 +65,14 @@ class MossCodecDecoder:
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.intra_op_num_threads = intra_op_num_threads
         sess_options.inter_op_num_threads = 1
-        resolved = providers or ["CPUExecutionProvider"]
+        if providers is None:
+            avail = ort.get_available_providers()
+            if "CUDAExecutionProvider" in avail:
+                resolved = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            else:
+                resolved = ["CPUExecutionProvider"]
+        else:
+            resolved = providers
 
         def _session(key: str):
             return ort.InferenceSession(

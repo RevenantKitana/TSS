@@ -29,7 +29,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 
 DEFAULT_MODEL = os.environ.get("ZEROTTS_MODEL", "zeroweight-ai/ZeroTTS")
-GENERATED_DIR = os.path.join(_ROOT, "outputs", "generated")
+GENERATED_DIR = os.environ.get("ZEROTTS_OUTPUT_DIR", os.path.join(_ROOT, "outputs", "generated"))
 SAMPLE_TEXTS_PATH = os.path.join(_HERE, "test_samples.txt")
 MAX_TEXT_CHARS = 5000
 
@@ -576,13 +576,18 @@ def open_folder(path: str | None) -> str:
     try:
         if sys.platform == "win32":
             os.startfile(target_dir)
+            return f"📂 Đã mở thư mục trên máy: {target_dir}"
         elif sys.platform == "darwin":
             subprocess.Popen(["open", target_dir])
+            return f"📂 Đã mở thư mục trên máy: {target_dir}"
         else:
-            subprocess.Popen(["xdg-open", target_dir])
-        return f"📂 Đã mở thư mục trên máy: {target_dir}"
+            import shutil
+            if shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", target_dir])
+                return f"📂 Đã mở thư mục trên máy: {target_dir}"
+            return f"📁 Thư mục lưu trữ: {target_dir}"
     except Exception as exc:
-        return f"❌ Lỗi mở thư mục: {exc}"
+        return f"📁 Thư mục lưu trữ: {target_dir} ({exc})"
 
 
 

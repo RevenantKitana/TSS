@@ -70,7 +70,14 @@ class ZeroTTS:
 
         model_dir = Path(model_dir)
         self.model_dir = model_dir
-        self.providers = providers or ["CPUExecutionProvider"]
+        if providers is None:
+            avail = ort.get_available_providers()
+            if "CUDAExecutionProvider" in avail:
+                self.providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            else:
+                self.providers = ["CPUExecutionProvider"]
+        else:
+            self.providers = providers
         config = hub.load_config(model_dir)
         self.config = config
 
