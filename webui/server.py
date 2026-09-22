@@ -114,7 +114,8 @@ async def get_voices():
                 "preview_url": f"/api/voice-sample?name={urllib.parse.quote(v.name)}" if has_preview else None,
                 "preview_source": preview_p,
             })
-        except Exception:
+        except Exception as e:
+            print(f"[API] ⚠️ Error loading voice '{name}': {e}")
             continue
     print(f"[API] 📋 Returning {len(voices)} voices from directory: {tts.voices_root}")
     return {"voices": voices, "default": voices[0]["id"] if voices else None, "voices_root": str(tts.voices_root)}

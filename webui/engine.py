@@ -168,8 +168,6 @@ def voice_preview_path(name: str) -> str | None:
             os.path.join(str(tts.voices_root), name, "preview.wav"),
             os.path.join(_ROOT, "Voice_ZeroTTS_model", "voices", name, "preview.wav"),
             os.path.join(_ROOT, "Voice_ZeroTTS_model", name, "preview.wav"),
-            os.path.join(_ROOT, "ZeroTTS_model", "voices", name, "preview.wav"),
-            os.path.join(_ROOT, "ZeroTTS_model", name, "preview.wav"),
         ]
         for c in candidates:
             if os.path.isfile(c):

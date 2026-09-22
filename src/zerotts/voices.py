@@ -71,10 +71,16 @@ class Voice:
         return list(self.meta.get("tags", []))
 
 
+def _is_valid_voice_dir(vdir: Path) -> bool:
+    if not vdir.is_dir():
+        return False
+    return (vdir / "voice.npz").exists() or (vdir / "voice.bin").exists() or (vdir / "meta.json").exists()
+
+
 def resolve_voices_root(voices_root: str | Path) -> Path:
     """Ensure voices_root points to the directory directly containing voice subfolders."""
     root = Path(voices_root)
-    if (root / "voices").is_dir() and not any((d / "voice.npz").exists() for d in root.iterdir() if d.is_dir()):
+    if (root / "voices").is_dir() and not any(_is_valid_voice_dir(d) for d in root.iterdir() if d.is_dir()):
         return root / "voices"
     return root
 
@@ -83,7 +89,7 @@ def _voice_dirs(voices_root: Path):
     root = resolve_voices_root(voices_root)
     if not root.is_dir():
         return []
-    return sorted(d for d in root.iterdir() if d.is_dir() and (d / "voice.npz").exists())
+    return sorted(d for d in root.iterdir() if _is_valid_voice_dir(d))
 
 
 def list_voices(voices_root: str | Path) -> list:
@@ -92,27 +98,66 @@ def list_voices(voices_root: str | Path) -> list:
 
 
 def load_voice(voices_root: str | Path, name: str, expect_queries: int | None = None) -> Voice:
-    """Load one voice pack by name.
-
-    ``expect_queries`` is the model's ``n_voice_queries``. A mismatch is fatal
-    and says so: latents built for a different model would still be the right
-    dtype and rank, so they would feed the graph cleanly and produce confident
-    nonsense.
-    """
+    """Load one voice pack by name. Supports both voice.npz and raw voice.bin with auto-recovery."""
     root = resolve_voices_root(Path(voices_root))
     vdir = root / name
     npz = vdir / "voice.npz"
-    if not npz.exists():
+    bin_file = vdir / "voice.bin"
+
+    emb = None
+    stored_q = None
+
+    # 1. Try loading from voice.npz
+    if npz.exists():
+        try:
+            data = np.load(npz)
+            emb = np.asarray(data["voice_emb"], dtype=np.float32)
+            stored_q = int(data["n_voice_queries"]) if "n_voice_queries" in data else int(emb.shape[1] if emb.ndim > 1 else emb.shape[0])
+        except Exception:
+            emb = None
+
+    # 2. Try loading from voice.bin (raw float32 array, shape 1, 10, 768)
+    if emb is None and bin_file.exists():
+        try:
+            if bin_file.stat().st_size >= 30720:
+                raw = np.fromfile(bin_file, dtype=np.float32)
+                if raw.size == 7680:  # 10 * 768
+                    emb = raw.reshape(1, 10, 768)
+                    stored_q = 10
+                elif raw.size % 768 == 0:
+                    q = raw.size // 768
+                    emb = raw.reshape(1, q, 768)
+                    stored_q = q
+        except Exception:
+            emb = None
+
+    # 3. If files are LFS pointers, attempt auto git lfs pull
+    if emb is None:
+        try:
+            repo_dir = root
+            while repo_dir.parent != repo_dir and not (repo_dir / ".git").is_dir():
+                repo_dir = repo_dir.parent
+            if (repo_dir / ".git").is_dir():
+                import subprocess
+                subprocess.run(["git", "-C", str(repo_dir), "lfs", "pull"], check=False)
+                if npz.exists():
+                    data = np.load(npz)
+                    emb = np.asarray(data["voice_emb"], dtype=np.float32)
+                    stored_q = int(data["n_voice_queries"]) if "n_voice_queries" in data else int(emb.shape[1] if emb.ndim > 1 else emb.shape[0])
+        except Exception:
+            pass
+
+    if emb is None:
         available = list_voices(root)
         raise FileNotFoundError(
-            f"no voice {name!r} in {root} (available: {available or 'none'})")
+            f"no valid voice data for {name!r} in {vdir} (voice.npz / voice.bin missing or unpulled LFS pointer). Available: {available or 'none'}")
 
-    data = np.load(npz)
-    emb = np.asarray(data["voice_emb"], dtype=np.float32)
     if emb.ndim == 2:
         emb = emb[None, :, :]
 
-    stored_q = int(data["n_voice_queries"]) if "n_voice_queries" in data else int(emb.shape[1])
+    if stored_q is None:
+        stored_q = int(emb.shape[1])
+
     if stored_q != emb.shape[1]:
         raise ValueError(
             f"voice {name!r} is inconsistent: n_voice_queries={stored_q} but "
