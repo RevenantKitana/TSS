@@ -68,7 +68,7 @@ class GenerateRequest(BaseModel):
     topp: float = 0.95
     repetition_penalty: float = 1.2
     eoa_extra_frames: int = 1
-    num_workers: int = Field(1, ge=1, le=8)
+    num_workers: int = Field(1, ge=1, le=16)
 
 
 class ConcatRequest(BaseModel):
