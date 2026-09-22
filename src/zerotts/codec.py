@@ -75,11 +75,18 @@ class MossCodecDecoder:
             resolved = providers
 
         def _session(key: str):
-            return ort.InferenceSession(
-                str(codec_dir / meta["files"][key]),
-                sess_options=sess_options,
-                providers=resolved,
-            )
+            try:
+                return ort.InferenceSession(
+                    str(codec_dir / meta["files"][key]),
+                    sess_options=sess_options,
+                    providers=resolved,
+                )
+            except Exception:
+                return ort.InferenceSession(
+                    str(codec_dir / meta["files"][key]),
+                    sess_options=sess_options,
+                    providers=["CPUExecutionProvider"],
+                )
 
         self._decode_full_sess = _session("decode_full")
         self._decode_step_sess = _session("decode_step")
