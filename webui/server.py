@@ -68,6 +68,7 @@ class GenerateRequest(BaseModel):
     topp: float = 0.95
     repetition_penalty: float = 1.2
     eoa_extra_frames: int = 1
+    num_workers: int = Field(1, ge=1, le=8)
 
 
 class ConcatRequest(BaseModel):
@@ -320,6 +321,7 @@ async def generate_tts(req: GenerateRequest):
                 audio_repetition_penalty=float(req.repetition_penalty),
                 eoa_extra_frames=int(req.eoa_extra_frames),
                 use_voice=use_voice,
+                num_workers=int(req.num_workers),
                 result=result_container,
             )
 

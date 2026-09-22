@@ -39,6 +39,7 @@
 
   const customNameInput = document.getElementById('customNameInput');
   const overwriteModeSelect = document.getElementById('overwriteModeSelect');
+  const workersSelect = document.getElementById('workersSelect');
   const autoConcatCheck = document.getElementById('autoConcatCheck');
   const mergedFormatSelect = document.getElementById('mergedFormatSelect');
 
@@ -164,6 +165,16 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
   }
 
   mainTextInput.addEventListener('input', updateCharCount);
+
+  if (workersSelect) {
+    const savedWorkers = localStorage.getItem('zerotts_saved_workers');
+    if (savedWorkers) {
+      workersSelect.value = savedWorkers;
+    }
+    workersSelect.addEventListener('change', () => {
+      localStorage.setItem('zerotts_saved_workers', workersSelect.value);
+    });
+  }
 
   // File Upload (.txt / .docx)
   if (uploadScriptBtn && scriptFileInput) {
@@ -1048,6 +1059,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
       topp: parseFloat(toppSlider.value),
       repetition_penalty: parseFloat(repSlider.value),
       eoa_extra_frames: parseInt(eoaSlider.value, 10),
+      num_workers: parseInt(workersSelect ? workersSelect.value : 1, 10),
     };
 
     try {

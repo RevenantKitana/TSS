@@ -376,7 +376,7 @@ def on_upload_file(file_obj):
 
 def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat, merged_format,
                 max_chunk_sec, cfg_scale, temperature, topk, topp,
-                repetition_penalty, eoa_extra_frames):
+                repetition_penalty, eoa_extra_frames, num_workers=1):
     """Batch generator streaming handler for Gradio UI.
 
     Outputs: (live player HTML, completed-file player, status, folder_dropdown,
@@ -404,6 +404,7 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
             audio_topk=int(topk), audio_topp=topp,
             audio_repetition_penalty=repetition_penalty,
             eoa_extra_frames=int(eoa_extra_frames), use_voice=use_voice,
+            num_workers=int(num_workers),
             result=result,
         ):
             if completed_file:
@@ -534,6 +535,17 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
                     auto_concat_checkbox = gr.Checkbox(
                         value=True,
                         label="🔗 Tự động nối audio (Auto-Merge)",
+                        scale=3,
+                    )
+                    workers_dropdown = gr.Dropdown(
+                        choices=[("1 Luồng (Đơn luồng - Tiêu chuẩn)", 1),
+                                 ("2 Luồng (Song song - Nhanh 2x)", 2),
+                                 ("3 Luồng (Song song - Nhanh 3x)", 3),
+                                 ("4 Luồng (Song song - Nhanh 4x)", 4),
+                                 ("6 Luồng (Song song - Nhanh 6x)", 6),
+                                 ("8 Luồng (Tăng tốc tối đa - 8x / GPU T4)", 8)],
+                        value=1,
+                        label="⚡ Luồng xử lý (Workers)",
                         scale=3,
                     )
                     merged_format_dropdown = gr.Dropdown(
@@ -729,7 +741,7 @@ Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nh
         fn=generate_ui,
         inputs=[text_box, voice_dropdown, mode_radio, custom_name_box, overwrite_mode_radio, auto_concat_checkbox, merged_format_dropdown,
                 chunk_sec_slider, cfg_slider, temperature_slider, topk_slider, topp_slider,
-                repetition_penalty_slider, eoa_extra_slider],
+                repetition_penalty_slider, eoa_extra_slider, workers_dropdown],
         outputs=[live_player, completed_audio, gen_status, folder_dropdown,
                  file_dropdown, segments_box],
     )

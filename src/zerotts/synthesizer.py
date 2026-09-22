@@ -98,6 +98,9 @@ class ZeroTTS:
         self.prefix_step_sess = _session("prefix_step.onnx")
         self.local_frame_decode_sess = _session("local_frame_decode.onnx")
         self.text_encoder_sess = _session("text_encoder.onnx")
+        
+        active_providers = self.prefix_step_sess.get_providers()
+        print(f"[ZeroTTS] ⚡ ONNX Active Providers: {active_providers}")
 
         self.num_codebooks = int(config["num_codebooks"])
         self.codebook_size = int(config["codebook_size"])

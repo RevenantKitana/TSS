@@ -7,6 +7,7 @@ learned unconditional prefix. There is no cloning — see zerotts.voices.
 
 from __future__ import annotations
 
+import concurrent.futures
 import io
 import json
 import os
@@ -990,6 +991,82 @@ def concat_folder_audio(folder_name_or_path: str, output_format: str = "WAV (PCM
 
 
 
+def synthesize_block_to_file(
+    block_text: str,
+    file_path: str,
+    tts: ZeroTTS,
+    voice_emb: np.ndarray | None,
+    cfg_scale: float = 1.0,
+    audio_temperature: float = 0.8,
+    audio_topk: int = 25,
+    audio_topp: float = 0.95,
+    audio_repetition_penalty: float = 1.2,
+    eoa_extra_frames: int = 1,
+    max_chunk_sec: float = 15.0,
+    silence_frame: np.ndarray | None = None,
+) -> tuple[float, str | None]:
+    """Synthesizes block text into a WAV file at file_path.
+
+    Returns (duration_sec, error_message or None).
+    """
+    plan = get_generation_plan(block_text, max_chunk_sec=max_chunk_sec)
+    stream = tts.codec.streaming_decoder()
+    all_chunks = []
+    try:
+        speech_idx = 0
+        for item in plan:
+            if item["type"] == "pause":
+                dur = item["duration_sec"]
+                if dur > 0:
+                    if silence_frame is not None:
+                        n_frames = max(1, int(round(dur * 12.5)))
+                        codes = np.stack([silence_frame] * n_frames, axis=-1)
+                        arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                        all_chunks.append(arr)
+                    else:
+                        n_samples = int(round(dur * tts.sample_rate))
+                        if n_samples > 0:
+                            all_chunks.append(np.zeros(n_samples, dtype=np.float32))
+                continue
+
+            segment = item["text"]
+            target = 1 if speech_idx == 0 else 16
+            speech_idx += 1
+            buf = []
+            for frame_codes in tts._generate_frames(
+                segment, min_frames=4, max_frames=1500,
+                voice_emb=voice_emb, cfg_scale=cfg_scale,
+                audio_temperature=audio_temperature, audio_topk=int(audio_topk),
+                audio_topp=audio_topp, audio_repetition_penalty=audio_repetition_penalty,
+                eoa_extra_frames=int(eoa_extra_frames),
+            ):
+                buf.append(frame_codes)
+                if len(buf) >= target:
+                    codes = np.stack(buf, axis=-1)
+                    arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                    all_chunks.append(arr)
+                    buf = []
+                    if speech_idx == 1:
+                        target = min(16, target * 2)
+            if buf:
+                codes = np.stack(buf, axis=-1)
+                arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                all_chunks.append(arr)
+            if silence_frame is not None:
+                codes = np.stack([silence_frame] * SILENCE_FRAMES_PER_CHUNK, axis=-1)
+                arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                all_chunks.append(arr)
+
+        full = np.concatenate(all_chunks) if all_chunks else np.zeros(0, dtype=np.float32)
+        sf.write(file_path, full, tts.sample_rate, subtype="PCM_16")
+        dur_sec = full.shape[0] / float(tts.sample_rate or 1)
+        return dur_sec, None
+    except Exception as exc:
+        return 0.0, str(exc)
+    finally:
+        stream.close()
+
+
 def generate_projects_queue_stream(
     text: str,
     voice_name: str | None,
@@ -1005,6 +1082,7 @@ def generate_projects_queue_stream(
     audio_repetition_penalty: float = 1.2,
     eoa_extra_frames: int = 1,
     use_voice: bool = True,
+    num_workers: int = 1,
     result: dict | None = None,
 ):
     """Multi-project queue generator processing `$[Folder]` projects and their `[Tag]` blocks.
@@ -1056,177 +1134,316 @@ def generate_projects_queue_stream(
         items_meta = []
         mapping_lines = []
         current_timeline_sec = 0.0
+        proj_prefix = f"[Dự án {p_idx}/{total_projects}: {folder_tag}] " if total_projects > 1 else ""
 
-        for b_idx, b in enumerate(blocks, start=1):
-            tag_name = b["tag"]
-            block_text = b["text"]
-            raw_tag = b["raw_tag"]
-            if is_single_proj_single_block:
-                file_name = f"{folder_tag}.wav"
-            else:
+        project_queue_meta = {
+            "current_project": folder_tag,
+            "project_index": p_idx,
+            "total_projects": total_projects,
+            "block_index": len(blocks),
+            "total_blocks": len(blocks),
+            "project_folder": out_dir,
+            "file_path": out_dir,
+        }
+
+        # --- MULTI-WORKER PARALLEL MODE ---
+        if num_workers > 1 and len(blocks) > 1 and not is_single_proj_single_block:
+            pending_tasks = []
+            for b_idx, b in enumerate(blocks, start=1):
+                tag_name = b["tag"]
+                block_text = b["text"]
+                raw_tag = b["raw_tag"]
                 file_name = f"{folder_tag}_{b_idx:02d}.wav"
-            file_path = os.path.join(out_dir, file_name)
+                file_path = os.path.join(out_dir, file_name)
 
-            queue_meta = {
-                "current_project": folder_tag,
-                "project_index": p_idx,
-                "total_projects": total_projects,
-                "block_index": b_idx,
-                "total_blocks": len(blocks),
-                "project_folder": out_dir,
-                "file_path": file_path,
+                if b["is_skipped"]:
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
+                        "duration_sec": 0.0, "text": block_text[:100], "status": "SKIPPED", "file_path": file_path
+                    })
+                    continue
+
+                if skip_existing and os.path.isfile(file_path):
+                    dur_sec = 0.0
+                    try:
+                        f_info = sf.info(file_path)
+                        dur_sec = f_info.frames / float(f_info.samplerate or 1)
+                    except Exception:
+                        dur_sec = 0.0
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
+                        "duration_sec": round(dur_sec, 3), "text": block_text[:100], "status": "EXISTS", "file_path": file_path
+                    })
+                    continue
+
+                if not block_text.strip():
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
+                        "duration_sec": 0.0, "text": "", "status": "EMPTY", "file_path": file_path
+                    })
+                    continue
+
+                pending_tasks.append({
+                    "index": b_idx, "file_name": file_name, "file_path": file_path,
+                    "tag_name": tag_name, "raw_tag": raw_tag, "block_text": block_text
+                })
+
+            total_to_gen = len(pending_tasks)
+            completed_count = 0
+            
+            yield f"{proj_prefix}Đang chạy song song ({len(pending_tasks)} câu, {num_workers} luồng)...", None, "\n".join(f"[{item['tag']}] (Đa luồng)" for item in blocks), {
+                "current_project": folder_tag, "project_index": p_idx, "total_projects": total_projects,
+                "block_index": 0, "total_blocks": len(blocks), "project_folder": out_dir, "file_path": out_dir
             }
 
-            proj_prefix = f"[Dự án {p_idx}/{total_projects}: {folder_tag}] " if total_projects > 1 else ""
+            if pending_tasks:
+                max_w = min(int(num_workers), len(pending_tasks))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_w) as pool:
+                    future_to_task = {
+                        pool.submit(
+                            synthesize_block_to_file,
+                            t["block_text"], t["file_path"], tts, voice_emb,
+                            cfg_scale, audio_temperature, audio_topk, audio_topp,
+                            audio_repetition_penalty, eoa_extra_frames, max_chunk_sec, silence_frame
+                        ): t for t in pending_tasks
+                    }
 
-            if b["is_skipped"]:
+                    for future in concurrent.futures.as_completed(future_to_task):
+                        task = future_to_task[future]
+                        completed_count += 1
+                        dur_sec, err_msg = future.result()
+                        if err_msg is None:
+                            status_val = "SUCCESS"
+                            last_saved_path = task["file_path"]
+                        else:
+                            status_val = f"FAILED: {err_msg}"
+
+                        items_meta.append({
+                            "index": task["index"],
+                            "file": task["file_name"],
+                            "tag": task["tag_name"],
+                            "raw_tag": task["raw_tag"],
+                            "duration_sec": round(dur_sec, 3),
+                            "text": task["block_text"][:100],
+                            "status": status_val,
+                            "file_path": task["file_path"]
+                        })
+
+                        q_meta = {
+                            "current_project": folder_tag,
+                            "project_index": p_idx,
+                            "total_projects": total_projects,
+                            "block_index": completed_count,
+                            "total_blocks": len(blocks),
+                            "project_folder": out_dir,
+                            "file_path": task["file_path"]
+                        }
+                        yield f"{proj_prefix}Hoàn thành [{completed_count}/{total_to_gen}] ({task['raw_tag']}) [⚡{max_w} luồng]...", task["file_path"], "\n".join(f"[{item['tag']}] ({'Xong' if item['index'] <= completed_count else 'Chờ'})" for item in blocks), q_meta
+
+            # Sort items by index 1..N to re-build exact timeline
+            items_meta.sort(key=lambda x: x["index"])
+            mapping_lines = []
+            current_timeline_sec = 0.0
+            for itm in items_meta:
+                dur = itm.get("duration_sec", 0.0)
                 start_ts = format_timestamp(current_timeline_sec)
-                items_meta.append({
-                    "index": b_idx, "file": file_name, "tag": tag_name,
-                    "start_sec": round(current_timeline_sec, 3),
-                    "end_sec": round(current_timeline_sec, 3),
-                    "duration_sec": 0.0,
-                    "start_timestamp": start_ts,
-                    "end_timestamp": start_ts,
-                    "text": block_text[:100], "status": "SKIPPED"
-                })
-                mapping_lines.append(f"[{file_name}] [{start_ts} -> {start_ts}] {raw_tag} [SKIPPED]")
-                yield f"{proj_prefix}Bỏ qua [{b_idx}/{len(blocks)}] {raw_tag} (Manual Skip)...", None, "\n".join(f"[{item['tag']}] (Skipped)" for item in blocks), queue_meta
-                continue
+                end_ts = format_timestamp(current_timeline_sec + dur)
+                itm["start_sec"] = round(current_timeline_sec, 3)
+                itm["end_sec"] = round(current_timeline_sec + dur, 3)
+                itm["start_timestamp"] = start_ts
+                itm["end_timestamp"] = end_ts
 
-            if skip_existing and os.path.isfile(file_path):
-                dur_sec = 0.0
-                try:
-                    f_info = sf.info(file_path)
-                    dur_sec = f_info.frames / float(f_info.samplerate or 1)
-                except Exception:
+                if itm["status"] == "SUCCESS":
+                    with open(itm["file_path"] + ".json", "w", encoding="utf-8") as f:
+                        json.dump({
+                            "voice": voice_name if use_voice else None,
+                            "cfg_scale": cfg_scale,
+                            "text": itm["text"].strip().replace("\n", " ")[:200],
+                            "created_at": ts_now,
+                            "duration_sec": dur,
+                            "start_timestamp": start_ts,
+                            "end_timestamp": end_ts
+                        }, f, indent=2, ensure_ascii=False)
+                    mapping_lines.append(f"[{itm['file']}] [{start_ts} -> {end_ts}] {itm.get('raw_tag', itm['tag'])}")
+                    current_timeline_sec += dur
+                elif itm["status"] == "EXISTS":
+                    mapping_lines.append(f"[{itm['file']}] [{start_ts} -> {end_ts}] {itm.get('raw_tag', itm['tag'])}")
+                    current_timeline_sec += dur
+                elif itm["status"] == "SKIPPED":
+                    mapping_lines.append(f"[{itm['file']}] [{start_ts} -> {start_ts}] {itm.get('raw_tag', itm['tag'])} [SKIPPED]")
+                else:
+                    mapping_lines.append(f"[{itm['file']}] [{start_ts} -> {start_ts}] {itm.get('raw_tag', itm['tag'])} [{itm['status']}]")
+
+        # --- SINGLE-WORKER SEQUENTIAL MODE ---
+        else:
+            for b_idx, b in enumerate(blocks, start=1):
+                tag_name = b["tag"]
+                block_text = b["text"]
+                raw_tag = b["raw_tag"]
+                if is_single_proj_single_block:
+                    file_name = f"{folder_tag}.wav"
+                else:
+                    file_name = f"{folder_tag}_{b_idx:02d}.wav"
+                file_path = os.path.join(out_dir, file_name)
+
+                queue_meta = {
+                    "current_project": folder_tag,
+                    "project_index": p_idx,
+                    "total_projects": total_projects,
+                    "block_index": b_idx,
+                    "total_blocks": len(blocks),
+                    "project_folder": out_dir,
+                    "file_path": file_path,
+                }
+
+                if b["is_skipped"]:
+                    start_ts = format_timestamp(current_timeline_sec)
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name,
+                        "start_sec": round(current_timeline_sec, 3),
+                        "end_sec": round(current_timeline_sec, 3),
+                        "duration_sec": 0.0,
+                        "start_timestamp": start_ts,
+                        "end_timestamp": start_ts,
+                        "text": block_text[:100], "status": "SKIPPED"
+                    })
+                    mapping_lines.append(f"[{file_name}] [{start_ts} -> {start_ts}] {raw_tag} [SKIPPED]")
+                    yield f"{proj_prefix}Bỏ qua [{b_idx}/{len(blocks)}] {raw_tag} (Manual Skip)...", None, "\n".join(f"[{item['tag']}] (Skipped)" for item in blocks), queue_meta
+                    continue
+
+                if skip_existing and os.path.isfile(file_path):
                     dur_sec = 0.0
-                
-                start_ts = format_timestamp(current_timeline_sec)
-                end_ts = format_timestamp(current_timeline_sec + dur_sec)
+                    try:
+                        f_info = sf.info(file_path)
+                        dur_sec = f_info.frames / float(f_info.samplerate or 1)
+                    except Exception:
+                        dur_sec = 0.0
+                    
+                    start_ts = format_timestamp(current_timeline_sec)
+                    end_ts = format_timestamp(current_timeline_sec + dur_sec)
 
-                items_meta.append({
-                    "index": b_idx, "file": file_name, "tag": tag_name,
-                    "start_sec": round(current_timeline_sec, 3),
-                    "end_sec": round(current_timeline_sec + dur_sec, 3),
-                    "duration_sec": round(dur_sec, 3),
-                    "start_timestamp": start_ts,
-                    "end_timestamp": end_ts,
-                    "text": block_text[:100], "status": "EXISTS"
-                })
-                mapping_lines.append(f"[{file_name}] [{start_ts} -> {end_ts}] {raw_tag}")
-                last_saved_path = file_path
-                current_timeline_sec += dur_sec
-                yield f"{proj_prefix}Bỏ qua [{b_idx}/{len(blocks)}] {raw_tag} (Tệp đã tồn tại)...", file_path, "\n".join(f"[{item['tag']}] (Exists)" for item in blocks), queue_meta
-                continue
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name,
+                        "start_sec": round(current_timeline_sec, 3),
+                        "end_sec": round(current_timeline_sec + dur_sec, 3),
+                        "duration_sec": round(dur_sec, 3),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "text": block_text[:100], "status": "EXISTS"
+                    })
+                    mapping_lines.append(f"[{file_name}] [{start_ts} -> {end_ts}] {raw_tag}")
+                    last_saved_path = file_path
+                    current_timeline_sec += dur_sec
+                    yield f"{proj_prefix}Bỏ qua [{b_idx}/{len(blocks)}] {raw_tag} (Tệp đã tồn tại)...", file_path, "\n".join(f"[{item['tag']}] (Exists)" for item in blocks), queue_meta
+                    continue
 
-            if not block_text.strip():
-                items_meta.append({
-                    "index": b_idx, "file": file_name, "tag": tag_name,
-                    "text": "", "status": "EMPTY"
-                })
-                continue
+                if not block_text.strip():
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name,
+                        "text": "", "status": "EMPTY"
+                    })
+                    continue
 
-            plan = get_generation_plan(block_text, max_chunk_sec=max_chunk_sec)
-            segments_preview = get_text_segments(block_text, max_chunk_sec=max_chunk_sec)
-            segments_text = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(segments_preview))
+                plan = get_generation_plan(block_text, max_chunk_sec=max_chunk_sec)
+                segments_preview = get_text_segments(block_text, max_chunk_sec=max_chunk_sec)
+                segments_text = "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(segments_preview))
 
-            yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag})...", None, segments_text, queue_meta
+                yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag})...", None, segments_text, queue_meta
 
-            stream = tts.codec.streaming_decoder()
-            all_chunks = []
-            try:
-                speech_idx = 0
-                for item in plan:
-                    if item["type"] == "pause":
-                        dur = item["duration_sec"]
-                        if dur > 0:
-                            if silence_frame is not None:
-                                n_frames = max(1, int(round(dur * 12.5)))
-                                codes = np.stack([silence_frame] * n_frames, axis=-1)
+                stream = tts.codec.streaming_decoder()
+                all_chunks = []
+                try:
+                    speech_idx = 0
+                    for item in plan:
+                        if item["type"] == "pause":
+                            dur = item["duration_sec"]
+                            if dur > 0:
+                                if silence_frame is not None:
+                                    n_frames = max(1, int(round(dur * 12.5)))
+                                    codes = np.stack([silence_frame] * n_frames, axis=-1)
+                                    arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                                    all_chunks.append(arr)
+                                else:
+                                    n_samples = int(round(dur * tts.sample_rate))
+                                    if n_samples > 0:
+                                        all_chunks.append(np.zeros(n_samples, dtype=np.float32))
+                                yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag}) [Tạm dừng {dur:.2g}s]...", None, segments_text, queue_meta
+                            continue
+
+                        segment = item["text"]
+                        target = 1 if speech_idx == 0 else 16
+                        speech_idx += 1
+                        buf = []
+                        for frame_codes in tts._generate_frames(
+                            segment, min_frames=4, max_frames=1500,
+                            voice_emb=voice_emb, cfg_scale=cfg_scale,
+                            audio_temperature=audio_temperature, audio_topk=int(audio_topk),
+                            audio_topp=audio_topp, audio_repetition_penalty=audio_repetition_penalty,
+                            eoa_extra_frames=int(eoa_extra_frames),
+                        ):
+                            buf.append(frame_codes)
+                            if len(buf) >= target:
+                                codes = np.stack(buf, axis=-1)
                                 arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
                                 all_chunks.append(arr)
-                            else:
-                                n_samples = int(round(dur * tts.sample_rate))
-                                if n_samples > 0:
-                                    all_chunks.append(np.zeros(n_samples, dtype=np.float32))
-                            yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag}) [Tạm dừng {dur:.2g}s]...", None, segments_text, queue_meta
-                        continue
-
-                    segment = item["text"]
-                    target = 1 if speech_idx == 0 else 16
-                    speech_idx += 1
-                    buf = []
-                    for frame_codes in tts._generate_frames(
-                        segment, min_frames=4, max_frames=1500,
-                        voice_emb=voice_emb, cfg_scale=cfg_scale,
-                        audio_temperature=audio_temperature, audio_topk=int(audio_topk),
-                        audio_topp=audio_topp, audio_repetition_penalty=audio_repetition_penalty,
-                        eoa_extra_frames=int(eoa_extra_frames),
-                    ):
-                        buf.append(frame_codes)
-                        if len(buf) >= target:
+                                buf = []
+                                if speech_idx == 1:
+                                    target = min(16, target * 2)
+                                yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag})...", None, segments_text, queue_meta
+                        if buf:
                             codes = np.stack(buf, axis=-1)
                             arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
                             all_chunks.append(arr)
-                            buf = []
-                            if speech_idx == 1:
-                                target = min(16, target * 2)
-                            yield f"{proj_prefix}Đang tạo [{b_idx}/{len(blocks)}] ({raw_tag})...", None, segments_text, queue_meta
-                    if buf:
-                        codes = np.stack(buf, axis=-1)
-                        arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
-                        all_chunks.append(arr)
-                    if silence_frame is not None:
-                        codes = np.stack([silence_frame] * SILENCE_FRAMES_PER_CHUNK, axis=-1)
-                        arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
-                        all_chunks.append(arr)
+                        if silence_frame is not None:
+                            codes = np.stack([silence_frame] * SILENCE_FRAMES_PER_CHUNK, axis=-1)
+                            arr = np.asarray(stream.decode_chunk(codes)).squeeze(0)
+                            all_chunks.append(arr)
 
-                full = np.concatenate(all_chunks) if all_chunks else np.zeros(0, dtype=np.float32)
-                sf.write(file_path, full, tts.sample_rate, subtype="PCM_16")
+                    full = np.concatenate(all_chunks) if all_chunks else np.zeros(0, dtype=np.float32)
+                    sf.write(file_path, full, tts.sample_rate, subtype="PCM_16")
 
-                dur_sec = full.shape[0] / float(tts.sample_rate or 1)
-                start_ts = format_timestamp(current_timeline_sec)
-                end_ts = format_timestamp(current_timeline_sec + dur_sec)
+                    dur_sec = full.shape[0] / float(tts.sample_rate or 1)
+                    start_ts = format_timestamp(current_timeline_sec)
+                    end_ts = format_timestamp(current_timeline_sec + dur_sec)
 
-                with open(file_path + ".json", "w", encoding="utf-8") as f:
-                    json.dump({"voice": voice_name if use_voice else None,
-                               "cfg_scale": cfg_scale,
-                               "text": block_text.strip().replace("\n", " ")[:200],
-                               "created_at": ts_now,
-                               "duration_sec": dur_sec,
-                               "start_timestamp": start_ts,
-                               "end_timestamp": end_ts}, f, indent=2, ensure_ascii=False)
+                    with open(file_path + ".json", "w", encoding="utf-8") as f:
+                        json.dump({"voice": voice_name if use_voice else None,
+                                   "cfg_scale": cfg_scale,
+                                   "text": block_text.strip().replace("\n", " ")[:200],
+                                   "created_at": ts_now,
+                                   "duration_sec": dur_sec,
+                                   "start_timestamp": start_ts,
+                                   "end_timestamp": end_ts}, f, indent=2, ensure_ascii=False)
 
-                items_meta.append({
-                    "index": b_idx, "file": file_name, "tag": tag_name,
-                    "start_sec": round(current_timeline_sec, 3),
-                    "end_sec": round(current_timeline_sec + dur_sec, 3),
-                    "duration_sec": round(dur_sec, 3),
-                    "start_timestamp": start_ts,
-                    "end_timestamp": end_ts,
-                    "text": block_text.strip().replace("\n", " ")[:100],
-                    "status": "SUCCESS"
-                })
-                mapping_lines.append(f"[{file_name}] [{start_ts} -> {end_ts}] {raw_tag}")
-                last_saved_path = file_path
-                current_timeline_sec += dur_sec
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name,
+                        "start_sec": round(current_timeline_sec, 3),
+                        "end_sec": round(current_timeline_sec + dur_sec, 3),
+                        "duration_sec": round(dur_sec, 3),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "text": block_text.strip().replace("\n", " ")[:100],
+                        "status": "SUCCESS"
+                    })
+                    mapping_lines.append(f"[{file_name}] [{start_ts} -> {end_ts}] {raw_tag}")
+                    last_saved_path = file_path
+                    current_timeline_sec += dur_sec
 
-            except Exception as exc:
-                start_ts = format_timestamp(current_timeline_sec)
-                items_meta.append({
-                    "index": b_idx, "file": file_name, "tag": tag_name,
-                    "start_sec": round(current_timeline_sec, 3),
-                    "end_sec": round(current_timeline_sec, 3),
-                    "duration_sec": 0.0,
-                    "start_timestamp": start_ts,
-                    "end_timestamp": start_ts,
-                    "text": block_text[:100], "status": f"FAILED: {exc}"
-                })
-                mapping_lines.append(f"[{file_name}] [{start_ts} -> {start_ts}] {raw_tag} [FAILED]")
-                yield f"{proj_prefix}Lỗi ở [{b_idx}/{len(blocks)}] ({raw_tag}): {exc}", last_saved_path, segments_text, queue_meta
-            finally:
-                stream.close()
+                except Exception as exc:
+                    start_ts = format_timestamp(current_timeline_sec)
+                    items_meta.append({
+                        "index": b_idx, "file": file_name, "tag": tag_name,
+                        "start_sec": round(current_timeline_sec, 3),
+                        "end_sec": round(current_timeline_sec, 3),
+                        "duration_sec": 0.0,
+                        "start_timestamp": start_ts,
+                        "end_timestamp": start_ts,
+                        "text": block_text[:100], "status": f"FAILED: {exc}"
+                    })
+                    mapping_lines.append(f"[{file_name}] [{start_ts} -> {start_ts}] {raw_tag} [FAILED]")
+                    yield f"{proj_prefix}Lỗi ở [{b_idx}/{len(blocks)}] ({raw_tag}): {exc}", last_saved_path, segments_text, queue_meta
+                finally:
+                    stream.close()
 
         total_timeline_all_projects_sec += current_timeline_sec
 
@@ -1251,7 +1468,7 @@ def generate_projects_queue_stream(
         if auto_concat and not is_single_proj_single_block:
             valid_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
             if len(valid_wavs) > 1:
-                yield f"{proj_prefix}Đang nối audio batch thành {merged_format}...", last_saved_path, "Đang nối...", queue_meta
+                yield f"{proj_prefix}Đang nối audio batch thành {merged_format}...", last_saved_path, "Đang nối...", project_queue_meta
                 merged_path = concat_folder_audio(out_dir, output_format=merged_format)
                 if merged_path:
                     last_saved_path = merged_path
@@ -1295,6 +1512,7 @@ def generate_batch_stream(
     audio_repetition_penalty: float = 1.2,
     eoa_extra_frames: int = 1,
     use_voice: bool = True,
+    num_workers: int = 1,
     result: dict | None = None,
 ):
     """Batch generator processing blocks `[Tag]` into separate WAV files in custom folders."""
@@ -1313,6 +1531,7 @@ def generate_batch_stream(
         audio_repetition_penalty=audio_repetition_penalty,
         eoa_extra_frames=eoa_extra_frames,
         use_voice=use_voice,
+        num_workers=num_workers,
         result=result,
     ):
         yield status_msg, last_file, segs_text
