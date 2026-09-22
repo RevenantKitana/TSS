@@ -1109,55 +1109,57 @@ def generate_projects_queue_stream(
     all_generated_folders = []
     last_saved_path = None
     total_timeline_all_projects_sec = 0.0
+    ts_now = time.strftime("%Y%m%d_%H%M%S")
 
-    for p_idx, proj in enumerate(projects, start=1):
-        proj_name = proj["project_name"]
-        blocks = proj["blocks"]
-        if not blocks:
-            continue
+    # Count total blocks across all projects
+    total_all_blocks = sum(len(p.get("blocks", [])) for p in projects)
+    is_global_parallel = (num_workers > 1 and total_all_blocks > 1)
 
-        ts_now = time.strftime("%Y%m%d_%H%M%S")
-        is_single_proj_single_block = (total_projects == 1 and len(blocks) <= 1 and not custom_name)
-        
-        if is_single_proj_single_block:
-            out_dir = GENERATED_DIR
-            tag_name_clean = sanitize_filename(voice_name or "uncond")
-            folder_tag = proj_name if proj_name else f"{ts_now}_{tag_name_clean}"
-        else:
-            folder_tag = proj_name if proj_name else (f"batch_{ts_now}" if total_projects == 1 else f"proj_{p_idx:02d}_{ts_now}")
-            out_dir = os.path.join(GENERATED_DIR, folder_tag)
-            os.makedirs(out_dir, exist_ok=True)
+    # ══════════════════════════════════════════════════════════════════════════
+    # GLOBAL MULTI-PROJECT PARALLEL PROCESSING (Full GPU/CPU Thread Saturation)
+    # ══════════════════════════════════════════════════════════════════════════
+    if is_global_parallel:
+        project_data = []
+        all_pending_tasks = []
 
-        if out_dir not in all_generated_folders:
-            all_generated_folders.append(out_dir)
+        for p_idx, proj in enumerate(projects, start=1):
+            proj_name = proj["project_name"]
+            blocks = proj["blocks"]
+            if not blocks:
+                continue
 
-        items_meta = []
-        mapping_lines = []
-        current_timeline_sec = 0.0
-        proj_prefix = f"[Dự án {p_idx}/{total_projects}: {folder_tag}] " if total_projects > 1 else ""
+            is_single_proj_single_block = (total_projects == 1 and len(blocks) <= 1 and not custom_name)
+            if is_single_proj_single_block:
+                out_dir = GENERATED_DIR
+                tag_name_clean = sanitize_filename(voice_name or "uncond")
+                folder_tag = proj_name if proj_name else f"{ts_now}_{tag_name_clean}"
+            else:
+                folder_tag = proj_name if proj_name else (f"batch_{ts_now}" if total_projects == 1 else f"proj_{p_idx:02d}_{ts_now}")
+                out_dir = os.path.join(GENERATED_DIR, folder_tag)
+                os.makedirs(out_dir, exist_ok=True)
 
-        project_queue_meta = {
-            "current_project": folder_tag,
-            "project_index": p_idx,
-            "total_projects": total_projects,
-            "block_index": len(blocks),
-            "total_blocks": len(blocks),
-            "project_folder": out_dir,
-            "file_path": out_dir,
-        }
+            if out_dir not in all_generated_folders:
+                all_generated_folders.append(out_dir)
 
-        # --- MULTI-WORKER PARALLEL MODE ---
-        if num_workers > 1 and len(blocks) > 1 and not is_single_proj_single_block:
-            pending_tasks = []
+            p_info = {
+                "p_idx": p_idx,
+                "folder_tag": folder_tag,
+                "out_dir": out_dir,
+                "blocks": blocks,
+                "is_single_proj_single_block": is_single_proj_single_block,
+                "items_meta": [],
+            }
+            project_data.append(p_info)
+
             for b_idx, b in enumerate(blocks, start=1):
                 tag_name = b["tag"]
                 block_text = b["text"]
                 raw_tag = b["raw_tag"]
-                file_name = f"{folder_tag}_{b_idx:02d}.wav"
+                file_name = f"{folder_tag}.wav" if is_single_proj_single_block else f"{folder_tag}_{b_idx:02d}.wav"
                 file_path = os.path.join(out_dir, file_name)
 
                 if b["is_skipped"]:
-                    items_meta.append({
+                    p_info["items_meta"].append({
                         "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
                         "duration_sec": 0.0, "text": block_text[:100], "status": "SKIPPED", "file_path": file_path
                     })
@@ -1170,80 +1172,110 @@ def generate_projects_queue_stream(
                         dur_sec = f_info.frames / float(f_info.samplerate or 1)
                     except Exception:
                         dur_sec = 0.0
-                    items_meta.append({
+                    p_info["items_meta"].append({
                         "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
                         "duration_sec": round(dur_sec, 3), "text": block_text[:100], "status": "EXISTS", "file_path": file_path
                     })
                     continue
 
                 if not block_text.strip():
-                    items_meta.append({
+                    p_info["items_meta"].append({
                         "index": b_idx, "file": file_name, "tag": tag_name, "raw_tag": raw_tag,
                         "duration_sec": 0.0, "text": "", "status": "EMPTY", "file_path": file_path
                     })
                     continue
 
-                pending_tasks.append({
-                    "index": b_idx, "file_name": file_name, "file_path": file_path,
-                    "tag_name": tag_name, "raw_tag": raw_tag, "block_text": block_text
+                all_pending_tasks.append({
+                    "p_idx": p_idx,
+                    "folder_tag": folder_tag,
+                    "out_dir": out_dir,
+                    "b_idx": b_idx,
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "tag_name": tag_name,
+                    "raw_tag": raw_tag,
+                    "block_text": block_text,
+                    "total_blocks_in_proj": len(blocks),
                 })
 
-            total_to_gen = len(pending_tasks)
-            completed_count = 0
-            
-            yield f"{proj_prefix}Đang chạy song song ({len(pending_tasks)} câu, {num_workers} luồng)...", None, "\n".join(f"[{item['tag']}] (Đa luồng)" for item in blocks), {
-                "current_project": folder_tag, "project_index": p_idx, "total_projects": total_projects,
-                "block_index": 0, "total_blocks": len(blocks), "project_folder": out_dir, "file_path": out_dir
-            }
+        total_all_tasks = len(all_pending_tasks)
+        completed_global = 0
+        max_w = min(int(num_workers), total_all_tasks) if total_all_tasks > 0 else 1
 
-            if pending_tasks:
-                max_w = min(int(num_workers), len(pending_tasks))
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_w) as pool:
-                    future_to_task = {
-                        pool.submit(
-                            synthesize_block_to_file,
-                            t["block_text"], t["file_path"], tts, voice_emb,
-                            cfg_scale, audio_temperature, audio_topk, audio_topp,
-                            audio_repetition_penalty, eoa_extra_frames, max_chunk_sec, silence_frame
-                        ): t for t in pending_tasks
+        init_q_meta = {
+            "current_project": project_data[0]["folder_tag"] if project_data else "",
+            "project_index": 1,
+            "total_projects": total_projects,
+            "block_index": 0,
+            "total_blocks": total_all_tasks,
+            "project_folder": project_data[0]["out_dir"] if project_data else GENERATED_DIR,
+            "file_path": "",
+        }
+        yield f"🚀 Khởi động {max_w} luồng song song cho toàn bộ {total_all_tasks} câu ({total_projects} dự án)...", None, f"Đang nạp {total_all_tasks} công việc lên {max_w} workers...", init_q_meta
+
+        if all_pending_tasks:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_w) as pool:
+                future_to_task = {
+                    pool.submit(
+                        synthesize_block_to_file,
+                        t["block_text"], t["file_path"], tts, voice_emb,
+                        cfg_scale, audio_temperature, audio_topk, audio_topp,
+                        audio_repetition_penalty, eoa_extra_frames, max_chunk_sec, silence_frame
+                    ): t for t in all_pending_tasks
+                }
+
+                proj_done_count = {p["p_idx"]: 0 for p in project_data}
+
+                for future in concurrent.futures.as_completed(future_to_task):
+                    task = future_to_task[future]
+                    completed_global += 1
+                    proj_done_count[task["p_idx"]] += 1
+                    dur_sec, err_msg = future.result()
+
+                    status_val = "SUCCESS" if err_msg is None else f"FAILED: {err_msg}"
+                    if err_msg is None:
+                        last_saved_path = task["file_path"]
+
+                    for p in project_data:
+                        if p["p_idx"] == task["p_idx"]:
+                            p["items_meta"].append({
+                                "index": task["b_idx"],
+                                "file": task["file_name"],
+                                "tag": task["tag_name"],
+                                "raw_tag": task["raw_tag"],
+                                "duration_sec": round(dur_sec, 3),
+                                "text": task["block_text"][:100],
+                                "status": status_val,
+                                "file_path": task["file_path"]
+                            })
+                            break
+
+                    q_meta = {
+                        "current_project": task["folder_tag"],
+                        "project_index": task["p_idx"],
+                        "total_projects": total_projects,
+                        "block_index": proj_done_count[task["p_idx"]],
+                        "total_blocks": task["total_blocks_in_proj"],
+                        "project_folder": task["out_dir"],
+                        "file_path": task["file_path"]
                     }
 
-                    for future in concurrent.futures.as_completed(future_to_task):
-                        task = future_to_task[future]
-                        completed_count += 1
-                        dur_sec, err_msg = future.result()
-                        if err_msg is None:
-                            status_val = "SUCCESS"
-                            last_saved_path = task["file_path"]
-                        else:
-                            status_val = f"FAILED: {err_msg}"
+                    proj_lbl = f"[Dự án {task['p_idx']}/{total_projects}: {task['folder_tag']}]" if total_projects > 1 else ""
+                    yield f"{proj_lbl} Hoàn thành [{proj_done_count[task['p_idx']]}/{task['total_blocks_in_proj']}] ({task['raw_tag']}) [⚡ Tiến độ chung: {completed_global}/{total_all_tasks} câu | {max_w} luồng]...", task["file_path"], f"Đã xử lý {completed_global}/{total_all_tasks} câu.", q_meta
 
-                        items_meta.append({
-                            "index": task["index"],
-                            "file": task["file_name"],
-                            "tag": task["tag_name"],
-                            "raw_tag": task["raw_tag"],
-                            "duration_sec": round(dur_sec, 3),
-                            "text": task["block_text"][:100],
-                            "status": status_val,
-                            "file_path": task["file_path"]
-                        })
+        # Post-processing per project (write sidecars, mapping, info.json, auto_concat)
+        for p in project_data:
+            p_idx = p["p_idx"]
+            folder_tag = p["folder_tag"]
+            out_dir = p["out_dir"]
+            blocks = p["blocks"]
+            items_meta = p["items_meta"]
+            is_single_proj_single_block = p["is_single_proj_single_block"]
 
-                        q_meta = {
-                            "current_project": folder_tag,
-                            "project_index": p_idx,
-                            "total_projects": total_projects,
-                            "block_index": completed_count,
-                            "total_blocks": len(blocks),
-                            "project_folder": out_dir,
-                            "file_path": task["file_path"]
-                        }
-                        yield f"{proj_prefix}Hoàn thành [{completed_count}/{total_to_gen}] ({task['raw_tag']}) [⚡{max_w} luồng]...", task["file_path"], "\n".join(f"[{item['tag']}] ({'Xong' if item['index'] <= completed_count else 'Chờ'})" for item in blocks), q_meta
-
-            # Sort items by index 1..N to re-build exact timeline
             items_meta.sort(key=lambda x: x["index"])
             mapping_lines = []
             current_timeline_sec = 0.0
+
             for itm in items_meta:
                 dur = itm.get("duration_sec", 0.0)
                 start_ts = format_timestamp(current_timeline_sec)
@@ -1274,16 +1306,69 @@ def generate_projects_queue_stream(
                 else:
                     mapping_lines.append(f"[{itm['file']}] [{start_ts} -> {start_ts}] {itm.get('raw_tag', itm['tag'])} [{itm['status']}]")
 
-        # --- SINGLE-WORKER SEQUENTIAL MODE ---
-        else:
+            total_timeline_all_projects_sec += current_timeline_sec
+
+            if not is_single_proj_single_block:
+                mapping_path = os.path.join(out_dir, f"{folder_tag}_mapping.txt")
+                with open(mapping_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(mapping_lines))
+
+                info_path = os.path.join(out_dir, "info.json")
+                with open(info_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "folder_name": folder_tag,
+                        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "voice": voice_name if use_voice else "không giọng",
+                        "total_items": len(blocks),
+                        "total_duration_sec": round(current_timeline_sec, 3),
+                        "total_duration_timestamp": format_timestamp(current_timeline_sec),
+                        "items": items_meta
+                    }, f, indent=2, ensure_ascii=False)
+
+            if auto_concat and not is_single_proj_single_block:
+                valid_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
+                if len(valid_wavs) > 1:
+                    yield f"Đang nối audio dự án [{folder_tag}] thành {merged_format}...", last_saved_path, "Đang nối...", {
+                        "current_project": folder_tag, "project_index": p_idx, "total_projects": total_projects,
+                        "block_index": len(blocks), "total_blocks": len(blocks), "project_folder": out_dir, "file_path": out_dir
+                    }
+                    merged_path = concat_folder_audio(out_dir, output_format=merged_format)
+                    if merged_path:
+                        last_saved_path = merged_path
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SINGLE-WORKER SEQUENTIAL MODE (Streaming per block)
+    # ══════════════════════════════════════════════════════════════════════════
+    else:
+        for p_idx, proj in enumerate(projects, start=1):
+            proj_name = proj["project_name"]
+            blocks = proj["blocks"]
+            if not blocks:
+                continue
+
+            is_single_proj_single_block = (total_projects == 1 and len(blocks) <= 1 and not custom_name)
+            if is_single_proj_single_block:
+                out_dir = GENERATED_DIR
+                tag_name_clean = sanitize_filename(voice_name or "uncond")
+                folder_tag = proj_name if proj_name else f"{ts_now}_{tag_name_clean}"
+            else:
+                folder_tag = proj_name if proj_name else (f"batch_{ts_now}" if total_projects == 1 else f"proj_{p_idx:02d}_{ts_now}")
+                out_dir = os.path.join(GENERATED_DIR, folder_tag)
+                os.makedirs(out_dir, exist_ok=True)
+
+            if out_dir not in all_generated_folders:
+                all_generated_folders.append(out_dir)
+
+            items_meta = []
+            mapping_lines = []
+            current_timeline_sec = 0.0
+            proj_prefix = f"[Dự án {p_idx}/{total_projects}: {folder_tag}] " if total_projects > 1 else ""
+
             for b_idx, b in enumerate(blocks, start=1):
                 tag_name = b["tag"]
                 block_text = b["text"]
                 raw_tag = b["raw_tag"]
-                if is_single_proj_single_block:
-                    file_name = f"{folder_tag}.wav"
-                else:
-                    file_name = f"{folder_tag}_{b_idx:02d}.wav"
+                file_name = f"{folder_tag}.wav" if is_single_proj_single_block else f"{folder_tag}_{b_idx:02d}.wav"
                 file_path = os.path.join(out_dir, file_name)
 
                 queue_meta = {
@@ -1445,33 +1530,35 @@ def generate_projects_queue_stream(
                 finally:
                     stream.close()
 
-        total_timeline_all_projects_sec += current_timeline_sec
+            total_timeline_all_projects_sec += current_timeline_sec
 
-        if not is_single_proj_single_block:
-            mapping_path = os.path.join(out_dir, f"{folder_tag}_mapping.txt")
-            with open(mapping_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(mapping_lines))
+            if not is_single_proj_single_block:
+                mapping_path = os.path.join(out_dir, f"{folder_tag}_mapping.txt")
+                with open(mapping_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(mapping_lines))
 
-            info_path = os.path.join(out_dir, "info.json")
-            with open(info_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "folder_name": folder_tag,
-                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "voice": voice_name if use_voice else "không giọng",
-                    "total_items": len(blocks),
-                    "total_duration_sec": round(current_timeline_sec, 3),
-                    "total_duration_timestamp": format_timestamp(current_timeline_sec),
-                    "items": items_meta
-                }, f, indent=2, ensure_ascii=False)
+                info_path = os.path.join(out_dir, "info.json")
+                with open(info_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "folder_name": folder_tag,
+                        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "voice": voice_name if use_voice else "không giọng",
+                        "total_items": len(blocks),
+                        "total_duration_sec": round(current_timeline_sec, 3),
+                        "total_duration_timestamp": format_timestamp(current_timeline_sec),
+                        "items": items_meta
+                    }, f, indent=2, ensure_ascii=False)
 
-        merged_path = None
-        if auto_concat and not is_single_proj_single_block:
-            valid_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
-            if len(valid_wavs) > 1:
-                yield f"{proj_prefix}Đang nối audio batch thành {merged_format}...", last_saved_path, "Đang nối...", project_queue_meta
-                merged_path = concat_folder_audio(out_dir, output_format=merged_format)
-                if merged_path:
-                    last_saved_path = merged_path
+            if auto_concat and not is_single_proj_single_block:
+                valid_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav") and not "_FULL_MERGED" in f and not "_merged" in f.lower()]
+                if len(valid_wavs) > 1:
+                    yield f"{proj_prefix}Đang nối audio batch thành {merged_format}...", last_saved_path, "Đang nối...", {
+                        "current_project": folder_tag, "project_index": p_idx, "total_projects": total_projects,
+                        "block_index": len(blocks), "total_blocks": len(blocks), "project_folder": out_dir, "file_path": out_dir
+                    }
+                    merged_path = concat_folder_audio(out_dir, output_format=merged_format)
+                    if merged_path:
+                        last_saved_path = merged_path
 
     if result is not None:
         result["folders"] = all_generated_folders
