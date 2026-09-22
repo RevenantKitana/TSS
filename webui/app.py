@@ -24,13 +24,15 @@ import sys
 
 import gradio as gr
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+for _p in [_ROOT, os.path.join(_ROOT, "src"), _HERE]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import audio_stream  # noqa: E402
 import engine  # noqa: E402
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_HERE)
 BANNER_PATH = os.path.join(_ROOT, "docs", "assets", "banner.png")
 
 DEFAULT_TEXT = "Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS."

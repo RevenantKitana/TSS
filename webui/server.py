@@ -24,12 +24,15 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+for _p in [_ROOT, os.path.join(_ROOT, "src"), _HERE]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import audio_stream  # noqa: E402
 import engine  # noqa: E402
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
 _STATIC_DIR = os.path.join(_HERE, "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)
 

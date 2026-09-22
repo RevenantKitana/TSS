@@ -22,6 +22,12 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+for _p in [_ROOT, os.path.join(_ROOT, "src"), _HERE]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 from zerotts import ZeroTTS
 from zerotts.chunking import (
     chunk_text,
@@ -31,9 +37,6 @@ from zerotts.chunking import (
     normalize_punctuation,
 )
 from zerotts.text_norm import normalize_vi_text
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_HERE)
 
 DEFAULT_MODEL = os.environ.get("ZEROTTS_MODEL", "zeroweight-ai/ZeroTTS")
 _candidate_voices = [
