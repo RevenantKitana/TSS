@@ -48,10 +48,53 @@ def main():
         os.makedirs(args.drive_dir, exist_ok=True)
         print(f"📁 Thư mục lưu kết quả: {args.drive_dir}")
 
-    # 1. Start Server
+    # 1. Locate Server Script & Project Root
+    script_candidates = [
+        "webui/server.py",
+        "/kaggle/working/TSS/webui/server.py",
+        "/kaggle/working/webui/server.py",
+        "/content/TSS/webui/server.py",
+        "/content/webui/server.py",
+    ]
+    server_script = None
+    project_root = None
+    for cand in script_candidates:
+        if os.path.isfile(cand):
+            server_script = os.path.abspath(cand)
+            project_root = os.path.dirname(os.path.dirname(server_script))
+            break
+
+    if not server_script:
+        import glob
+        matches = glob.glob("**/webui/server.py", recursive=True) + glob.glob("/kaggle/**/webui/server.py", recursive=True) + glob.glob("/content/**/webui/server.py", recursive=True)
+        if matches:
+            server_script = os.path.abspath(matches[0])
+            project_root = os.path.dirname(os.path.dirname(server_script))
+
+    if not server_script or not os.path.isfile(server_script):
+        raise FileNotFoundError("❌ Không tìm thấy file webui/server.py! Vui lòng kiểm tra mã nguồn TSS.")
+
+    model_dir = args.model
+    if not os.path.exists(os.path.join(model_dir, "config.json")):
+        for candidate in [
+            os.path.join(project_root, "ZeroTTS_model"),
+            "/kaggle/working/TSS/ZeroTTS_model",
+            "/kaggle/working/ZeroTTS_model",
+            "/content/TSS/ZeroTTS_model",
+            "/content/ZeroTTS_model",
+        ]:
+            if os.path.exists(os.path.join(candidate, "config.json")):
+                model_dir = candidate
+                break
+
+    print(f"🎯 WebUI Script: {server_script}")
+    print(f"📂 Project Root: {project_root}")
+    print(f"🧠 Model Dir:    {model_dir}")
+
+    # 2. Start Server
     print("🚀 Đang khởi chạy ZeroTTS FastAPI WebUI Server...")
-    server_cmd = [sys.executable, "webui/server.py", "--model", args.model, "--host", args.host, "--port", str(args.port)]
-    server_proc = subprocess.Popen(server_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    server_cmd = [sys.executable, server_script, "--model", model_dir, "--host", args.host, "--port", str(args.port)]
+    server_proc = subprocess.Popen(server_cmd, cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
     time.sleep(3)
 
