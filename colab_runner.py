@@ -18,39 +18,10 @@ import time
 import urllib.request
 
 
-import glob
-
-def find_server_script() -> tuple[str, str]:
-    """Find webui/server.py and its project root directory automatically."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(here, "webui", "server.py"),
-        os.path.join(os.getcwd(), "webui", "server.py"),
-        "/content/TSS/webui/server.py",
-        "/kaggle/working/TSS/webui/server.py",
-    ]
-    for c in candidates:
-        if os.path.isfile(c):
-            return os.path.abspath(c), os.path.dirname(os.path.dirname(os.path.abspath(c)))
-    
-    # Recursive fallback search
-    for root in [here, os.getcwd(), "/content", "/kaggle/working"]:
-        if os.path.exists(root):
-            matches = glob.glob(os.path.join(root, "**/webui/server.py"), recursive=True)
-            if matches:
-                chosen = os.path.abspath(matches[0])
-                return chosen, os.path.dirname(os.path.dirname(chosen))
-    raise FileNotFoundError("❌ Không tìm thấy file webui/server.py! Vui lòng kiểm tra mã nguồn đã được giải nén.")
-
-
 def setup_cloudflared() -> str:
     """Ensure cloudflared executable is available on Linux system."""
     cf_path = shutil.which("cloudflared") or "/usr/local/bin/cloudflared"
     if not os.path.exists(cf_path):
-        # Also check /kaggle/working/cloudflared or /content/cloudflared
-        for alt in ["/kaggle/working/cloudflared", "/content/cloudflared"]:
-            if os.path.exists(alt):
-                return alt
         print("📥 Đang tải Cloudflare Tunnel binary (cloudflared)...")
         os.makedirs(os.path.dirname(cf_path), exist_ok=True)
         url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
@@ -59,14 +30,8 @@ def setup_cloudflared() -> str:
             subprocess.run(["chmod", "+x", cf_path], check=True)
             print("✅ Đã cài đặt cloudflared thành công!")
         except Exception as e:
-            print(f"⚠️ Không thể tải cloudflared tự động vào {cf_path}: {e}")
-            alt_path = os.path.join(os.getcwd(), "cloudflared")
-            try:
-                urllib.request.urlretrieve(url, alt_path)
-                subprocess.run(["chmod", "+x", alt_path], check=True)
-                return alt_path
-            except Exception:
-                return "cloudflared"
+            print(f"⚠️ Không thể tải cloudflared tự động: {e}")
+            return "cloudflared"
     return cf_path
 
 
@@ -84,17 +49,9 @@ def main():
         print(f"📁 Thư mục lưu kết quả: {args.drive_dir}")
 
     # 1. Start Server
-    server_py, project_root = find_server_script()
-    print(f"🚀 Đang khởi chạy ZeroTTS FastAPI WebUI Server từ {server_py} (root: {project_root})...")
-    server_cmd = [sys.executable, server_py, "--model", args.model, "--host", args.host, "--port", str(args.port)]
-    server_proc = subprocess.Popen(
-        server_cmd,
-        cwd=project_root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1
-    )
+    print("🚀 Đang khởi chạy ZeroTTS FastAPI WebUI Server...")
+    server_cmd = [sys.executable, "webui/server.py", "--model", args.model, "--host", args.host, "--port", str(args.port)]
+    server_proc = subprocess.Popen(server_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
     time.sleep(3)
 

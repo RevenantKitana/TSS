@@ -1,5 +1,5 @@
 """Tạo file zip gọn nhẹ (chỉ chứa mã nguồn, bỏ qua các thư mục nặng như venv, model, ffmpeg)
-để tải lên Google Colab, Kaggle hoặc lưu vào Google Drive.
+để tải lên Google Colab hoặc lưu vào Google Drive.
 """
 
 import os
@@ -15,14 +15,18 @@ EXCLUDE_DIRS = {
     ".git",
     "__pycache__",
     "python-3.11.2-embed-amd64",
-    "ZeroTTS_model",
     "outputs",
     "ffmpeg",
     ".idea",
     ".vscode",
+    ".pytest_cache",
+    ".ruff_cache",
+    "onnx",
+    "samples",
 }
 
 EXCLUDE_EXTS = {".pyc", ".pyd", ".tmp", ".log"}
+EXCLUDE_FILES = {"banner.png"}
 
 
 def create_colab_package(output_zip: str = "TSS_Code.zip"):
@@ -46,7 +50,7 @@ def create_colab_package(output_zip: str = "TSS_Code.zip"):
                 rel_dp = ""
 
             for f in fn:
-                if f == output_zip or any(f.endswith(ext) for ext in EXCLUDE_EXTS):
+                if f == output_zip or f in EXCLUDE_FILES or any(f.endswith(ext) for ext in EXCLUDE_EXTS):
                     continue
 
                 abs_f = os.path.join(dp, f)
@@ -59,7 +63,7 @@ def create_colab_package(output_zip: str = "TSS_Code.zip"):
     print(f"✅ Đã tạo thành công file: {output_zip}")
     print(f"   - Số lượng file: {file_count}")
     print(f"   - Dung lượng: {zip_size_mb:.2f} MB")
-    print(f"👉 Bạn có thể tải file '{output_zip}' này lên Google Colab, Kaggle hoặc Google Drive để chạy!")
+    print(f"👉 Bạn có thể tải file '{output_zip}' này lên Google Colab hoặc Google Drive để chạy!")
 
 
 if __name__ == "__main__":
