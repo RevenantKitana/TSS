@@ -1,5 +1,5 @@
 """Tạo file zip gọn nhẹ (chỉ chứa mã nguồn, bỏ qua các thư mục nặng như venv, model, ffmpeg)
-để tải lên Google Colab hoặc lưu vào Google Drive.
+để tải lên Google Colab, Kaggle hoặc lưu vào Google Drive.
 """
 
 import os
@@ -59,7 +59,7 @@ def create_colab_package(output_zip: str = "TSS_Code.zip"):
     print(f"✅ Đã tạo thành công file: {output_zip}")
     print(f"   - Số lượng file: {file_count}")
     print(f"   - Dung lượng: {zip_size_mb:.2f} MB")
-    print(f"👉 Bạn có thể tải file '{output_zip}' này lên Google Colab hoặc Google Drive để chạy!")
+    print(f"👉 Bạn có thể tải file '{output_zip}' này lên Google Colab, Kaggle hoặc Google Drive để chạy!")
 
 
 if __name__ == "__main__":
