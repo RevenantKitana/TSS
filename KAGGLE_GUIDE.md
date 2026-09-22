@@ -32,7 +32,7 @@ Trước khi bấm chạy notebook, bạn nhìn sang cột **Notebook settings**
    - Ở cột bên phải (**Settings**): Chọn **Accelerator: GPU T4 x2** và bật **Internet: ON**.
 3. **Chạy toàn bộ (Run All)**:
    - Chọn menu **Run** -> **Run All (Chạy tất cả)**:
-   - Hệ thống sẽ tự động clone mã nguồn từ `https://github.com/RevenantKitana/TSS`, cài đặt ONNX Runtime GPU (CUDA), tải mô hình và kích hoạt Cloudflare Tunnel.
+   - Hệ thống sẽ tự động clone mã nguồn từ `https://github.com/RevenantKitana/TSS` (kèm thư mục giọng `Voice_ZeroTTS_model`), cài đặt ONNX Runtime GPU (CUDA), tải mô hình và kích hoạt Cloudflare Tunnel.
 4. **Mở WebUI Studio**:
    - Khi chạy tới **Bước 5**, bấm vào nút hoặc đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
 

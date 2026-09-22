@@ -23,6 +23,7 @@ EXCLUDE_DIRS = {
     ".ruff_cache",
     "onnx",
     "samples",
+    "ZeroTTS_model",
 }
 
 EXCLUDE_EXTS = {".pyc", ".pyd", ".tmp", ".log"}

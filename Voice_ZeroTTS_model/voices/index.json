@@ -1,0 +1,164 @@
+{
+  "voices": [
+    {
+      "name": "maichi",
+      "display_name": "Mai Chi",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ, kể chuyện, nhẹ nhàng, thân thiện",
+      "tags": [
+        "nữ",
+        "trẻ",
+        "kể chuyện",
+        "nhẹ nhàng",
+        "thân thiện"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "baotrang",
+      "display_name": "Bảo Trang",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trưởng thành, tin tức, rõ ràng, trung tính",
+      "tags": [
+        "nữ",
+        "trưởng thành",
+        "tin tức",
+        "rõ ràng",
+        "trung tính"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "kimoanh",
+      "display_name": "Kim Oanh",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trung niên, kể chuyện, ấm áp, truyền cảm",
+      "tags": [
+        "nữ",
+        "trung niên",
+        "kể chuyện",
+        "ấm áp",
+        "truyền cảm"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "giahuy",
+      "display_name": "Gia Huy",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trẻ, kể chuyện, trầm ấm, tâm tình",
+      "tags": [
+        "nam",
+        "trẻ",
+        "kể chuyện",
+        "trầm ấm",
+        "tâm tình"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "huuduc",
+      "display_name": "Hữu Đức",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, lớn tuổi, kể chuyện, trầm, điềm đạm",
+      "tags": [
+        "nam",
+        "lớn tuổi",
+        "kể chuyện",
+        "trầm",
+        "điềm đạm"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "quangminh",
+      "display_name": "Quang Minh",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trẻ, tin tức, rõ ràng, dứt khoát",
+      "tags": [
+        "nam",
+        "trẻ",
+        "tin tức",
+        "rõ ràng",
+        "dứt khoát"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "tiendat",
+      "display_name": "Tiến Đạt",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trẻ, bình luận, sôi nổi, năng lượng cao",
+      "tags": [
+        "nam",
+        "trẻ",
+        "bình luận",
+        "sôi nổi",
+        "năng lượng cao"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "hamy",
+      "display_name": "Hà My",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ, hoạt hình, cao, biểu cảm",
+      "tags": [
+        "nữ",
+        "trẻ",
+        "hoạt hình",
+        "cao",
+        "biểu cảm"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    }
+  ]
+}

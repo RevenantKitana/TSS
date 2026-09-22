@@ -1,0 +1,15 @@
+{
+  "name": "huuduc",
+  "display_name": "Hữu Đức",
+  "language": "vi",
+  "gender": "nam",
+  "description": "nam, lớn tuổi, kể chuyện, trầm, điềm đạm",
+  "tags": [
+    "nam",
+    "lớn tuổi",
+    "kể chuyện",
+    "trầm",
+    "điềm đạm"
+  ],
+  "n_voice_queries": 10
+}

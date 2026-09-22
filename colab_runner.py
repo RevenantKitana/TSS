@@ -38,6 +38,7 @@ def setup_cloudflared() -> str:
 def main():
     parser = argparse.ArgumentParser(description="ZeroTTS Colab Launcher")
     parser.add_argument("--model", default=os.environ.get("ZEROTTS_MODEL", "./ZeroTTS_model"), help="Model dir or HF ID")
+    parser.add_argument("--voices", default=os.environ.get("ZEROTTS_VOICES_DIR", ""), help="Voices dir")
     parser.add_argument("--port", type=int, default=7860, help="Local server port")
     parser.add_argument("--host", default="0.0.0.0", help="Host binding (default: 0.0.0.0)")
     parser.add_argument("--drive-dir", default=os.environ.get("ZEROTTS_OUTPUT_DIR", ""), help="Output directory on Drive/local")
@@ -87,13 +88,31 @@ def main():
                 model_dir = candidate
                 break
 
+    voices_dir = args.voices
+    if not voices_dir or not os.path.exists(voices_dir):
+        for vc in [
+            os.path.join(project_root, "Voice_ZeroTTS_model", "voices"),
+            os.path.join(project_root, "Voice_ZeroTTS_model"),
+            "/kaggle/working/TSS/Voice_ZeroTTS_model/voices",
+            "/kaggle/working/Voice_ZeroTTS_model/voices",
+            "/content/TSS/Voice_ZeroTTS_model/voices",
+            "/content/Voice_ZeroTTS_model/voices",
+        ]:
+            if os.path.exists(vc):
+                voices_dir = vc
+                break
+
     print(f"🎯 WebUI Script: {server_script}")
     print(f"📂 Project Root: {project_root}")
     print(f"🧠 Model Dir:    {model_dir}")
+    if voices_dir:
+        print(f"🎙️ Voices Dir:   {voices_dir}")
 
     # 2. Start Server
     print("🚀 Đang khởi chạy ZeroTTS FastAPI WebUI Server...")
     server_cmd = [sys.executable, server_script, "--model", model_dir, "--host", args.host, "--port", str(args.port)]
+    if voices_dir:
+        server_cmd.extend(["--voices", voices_dir])
     server_proc = subprocess.Popen(server_cmd, cwd=project_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
     time.sleep(3)

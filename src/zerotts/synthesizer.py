@@ -37,6 +37,7 @@ sampled frame.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -64,6 +65,7 @@ class ZeroTTS:
         providers: list[str] | None = None,
         intra_op_num_threads: int = 4,
         codec_intra_op_num_threads: int | None = None,
+        voices_root: str | Path | None = None,
         warmup: bool = True,
     ):
         import onnxruntime as ort
@@ -122,7 +124,36 @@ class ZeroTTS:
             intra_op_num_threads=n_codec_threads,
         )
 
-        self.voices_root = model_dir / "voices"
+        # ── Resolve Voices Root ───────────────────────────────────────────────
+        if voices_root is not None:
+            self.voices_root = _voices.resolve_voices_root(Path(voices_root))
+        else:
+            env_voices = os.environ.get("ZEROTTS_VOICES_DIR")
+            if env_voices and Path(env_voices).is_dir():
+                self.voices_root = _voices.resolve_voices_root(Path(env_voices))
+            else:
+                candidates = [
+                    Path("Voice_ZeroTTS_model") / "voices",
+                    Path("Voice_ZeroTTS_model"),
+                    model_dir.parent / "Voice_ZeroTTS_model" / "voices",
+                    model_dir.parent / "Voice_ZeroTTS_model",
+                    Path("/kaggle/working/TSS/Voice_ZeroTTS_model/voices"),
+                    Path("/kaggle/working/TSS/Voice_ZeroTTS_model"),
+                    Path("/kaggle/working/Voice_ZeroTTS_model/voices"),
+                    Path("/kaggle/working/Voice_ZeroTTS_model"),
+                    Path("/content/TSS/Voice_ZeroTTS_model/voices"),
+                    Path("/content/TSS/Voice_ZeroTTS_model"),
+                    Path("/content/Voice_ZeroTTS_model/voices"),
+                    Path("/content/Voice_ZeroTTS_model"),
+                    model_dir / "voices",
+                ]
+                resolved_root = model_dir / "voices"
+                for cand in candidates:
+                    if cand.is_dir() and (_voices.list_voices(cand) or (cand / "index.json").exists() or (cand / "voices").is_dir()):
+                        resolved_root = _voices.resolve_voices_root(cand)
+                        break
+                self.voices_root = _voices.resolve_voices_root(resolved_root)
+
         if warmup:
             self.warmup()
 
@@ -135,6 +166,7 @@ class ZeroTTS:
         revision: str | None = None,
         cache_dir: str | None = None,
         local_files_only: bool = False,
+        voices_dir: str | Path | None = None,
         **kwargs,
     ) -> ZeroTTS:
         """Load from a Hugging Face repo id or a local directory.
@@ -144,7 +176,7 @@ class ZeroTTS:
         model_dir = hub.resolve_model_dir(
             model_id, revision=revision, cache_dir=cache_dir,
             local_files_only=local_files_only)
-        return cls(model_dir, **kwargs)
+        return cls(model_dir, voices_root=voices_dir, **kwargs)
 
     def warmup(self) -> None:
         """Push one dummy request through every session on the hot path, so lazy

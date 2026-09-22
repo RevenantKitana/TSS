@@ -104,17 +104,20 @@ async def get_voices():
     for name in engine.list_voices():
         try:
             v = tts.load_voice(name)
-            has_preview = bool(v.preview_path and os.path.isfile(v.preview_path))
+            preview_p = engine.voice_preview_path(name)
+            has_preview = bool(preview_p and os.path.isfile(preview_p))
             voices.append({
                 "id": v.name,
                 "name": v.display_name or v.name,
                 "tags": v.tags or [],
                 "has_preview": has_preview,
                 "preview_url": f"/api/voice-sample?name={urllib.parse.quote(v.name)}" if has_preview else None,
+                "preview_source": preview_p,
             })
         except Exception:
             continue
-    return {"voices": voices, "default": voices[0]["id"] if voices else None}
+    print(f"[API] 📋 Returning {len(voices)} voices from directory: {tts.voices_root}")
+    return {"voices": voices, "default": voices[0]["id"] if voices else None, "voices_root": str(tts.voices_root)}
 
 
 @app.get("/api/voice-sample")
@@ -123,7 +126,12 @@ async def get_voice_sample(name: str = Query(...)):
     preview_path = engine.voice_preview_path(name)
     if not preview_path or not os.path.isfile(preview_path):
         raise HTTPException(status_code=404, detail="Voice sample not found.")
-    return FileResponse(preview_path, media_type="audio/wav")
+    print(f"[API] 🔊 Serving preview for '{name}' from: {preview_path}")
+    return FileResponse(
+        preview_path,
+        media_type="audio/wav",
+        headers={"X-Voice-Source": os.path.abspath(preview_path)}
+    )
 
 
 @app.get("/api/history/folders")
@@ -342,6 +350,7 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ZeroTTS Studio Web Server (HTML/Vanilla JS)")
     parser.add_argument("--model", default=engine.DEFAULT_MODEL, help="Model directory or repo ID")
+    parser.add_argument("--voices", default=engine.DEFAULT_VOICES, help="Voices directory (default: ./Voice_ZeroTTS_model/voices)")
     parser.add_argument("--host", default="127.0.0.1", help="Host address (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=7860, help="Port number (default: 7860)")
     parser.add_argument("--reload", action="store_true", help="Auto reload on code change")
@@ -350,7 +359,7 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    engine.set_model(args.model)
+    engine.set_model(args.model, voices_dir=args.voices)
     print("=" * 60)
     print("      Khởi chạy ZeroTTS Studio Web Server")
     print(f"      Địa chỉ truy cập: http://{args.host}:{args.port}")

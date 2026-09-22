@@ -1,0 +1,15 @@
+{
+  "name": "maichi",
+  "display_name": "Mai Chi",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trẻ, kể chuyện, nhẹ nhàng, thân thiện",
+  "tags": [
+    "nữ",
+    "trẻ",
+    "kể chuyện",
+    "nhẹ nhàng",
+    "thân thiện"
+  ],
+  "n_voice_queries": 10
+}

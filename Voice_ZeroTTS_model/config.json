@@ -1,0 +1,22 @@
+{
+  "text_format": "bpe",
+  "vocab_size": 8192,
+  "num_codebooks": 16,
+  "codebook_size": 1024,
+  "d_model": 768,
+  "n_heads": 12,
+  "n_layers": 9,
+  "n_voice_queries": 10,
+  "special_tokens": {
+    "<pad>": 0,
+    "<bos>": 1,
+    "<eot>": 2,
+    "<soa>": 3,
+    "<slot>": 4,
+    "<eoa>": 5,
+    "<en>": 6,
+    "<vi>": 7
+  },
+  "sample_rate": 48000,
+  "codec_frame_rate": 12.5
+}

@@ -1,0 +1,15 @@
+{
+  "name": "kimoanh",
+  "display_name": "Kim Oanh",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trung niên, kể chuyện, ấm áp, truyền cảm",
+  "tags": [
+    "nữ",
+    "trung niên",
+    "kể chuyện",
+    "ấm áp",
+    "truyền cảm"
+  ],
+  "n_voice_queries": 10
+}

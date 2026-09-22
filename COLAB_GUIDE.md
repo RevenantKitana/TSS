@@ -8,20 +8,19 @@ Hệ thống đã được thiết lập để bạn có thể mang **chính xá
 
 1. Tại thư mục dự án trên máy tính, bạn chỉ cần nhấp đúp vào file:
    👉 [`tao_file_zip_colab.bat`](file:///c:/Users/ADMIN/Downloads/TSS-VIE/tao_file_zip_colab.bat) (hoặc chạy lệnh `python package_colab_zip.py`).
-2. Script sẽ tự động gom toàn bộ mã nguồn `src/`, `webui/`, `HD.md`, cùng toàn bộ các gói giọng (`ZeroTTS_model/voices/`) trên máy thành 1 file duy nhất:
+2. Script sẽ tự động gom toàn bộ mã nguồn `src/`, `webui/`, `HD.md`, cùng toàn bộ các gói giọng (`Voice_ZeroTTS_model/voices/`) trên máy thành 1 file duy nhất:
    👉 **`TSS_Code.zip`** (Dung lượng siêu nhẹ ~4.9 MB).
 
 ---
 
 ## 🚀 Bước 2: Chạy Trên Google Colab
 
-### Cách 1 (Khuyên dùng - Nhanh nhất): Tải lên qua Google Drive
-1. Tải file **`TSS_Code.zip`** vừa tạo lên thư mục gốc của **Google Drive** của bạn (`MyDrive/TSS_Code.zip`).
-2. Mở [Google Colab](https://colab.research.google.com) và tải lên file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///c:/Users/ADMIN/Downloads/TSS-VIE/ZeroTTS_Colab_FreeTier.ipynb).
-3. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
-4. Chọn **Runtime** -> **Run all (Chạy tất cả)**:
-   - Colab sẽ tự nhận diện file `TSS_Code.zip` từ Google Drive, giải nén toàn bộ tính năng, đồng bộ chính xác 100% các file giọng đọc tùy chỉnh từ máy của bạn và cài đặt môi trường.
-   - Khi chạy đến **Bước 4**, bạn chỉ cần bấm vào đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI!
+### Cách 1 (Khuyên dùng - Nhanh nhất): Nạp Trực Tiếp Từ GitHub hoặc Google Drive
+1. Mở [Google Colab](https://colab.research.google.com) và mở file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) (hoặc nạp link GitHub `https://github.com/RevenantKitana/TSS`).
+2. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
+3. Chọn **Runtime** -> **Run all (Chạy tất cả)**:
+   - Colab sẽ tự đồng bộ mã nguồn và thư mục `Voice_ZeroTTS_model/voices`, tải model weights và khởi động server.
+   - Khi chạy đến **Bước 5**, bạn chỉ cần bấm vào đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
 
 ### Cách 2: Tải lên trực tiếp từ máy tính trong Colab
 - Nếu chưa tải file zip lên Google Drive, khi chạy đến **Bước 2** trong Notebook, một nút **Choose Files (Chọn tệp)** sẽ xuất hiện. Bạn chỉ cần bấm vào và chọn file `TSS_Code.zip` từ máy tính.

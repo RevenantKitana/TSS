@@ -1,0 +1,15 @@
+{
+  "name": "hamy",
+  "display_name": "Hà My",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trẻ, hoạt hình, cao, biểu cảm",
+  "tags": [
+    "nữ",
+    "trẻ",
+    "hoạt hình",
+    "cao",
+    "biểu cảm"
+  ],
+  "n_voice_queries": 10
+}

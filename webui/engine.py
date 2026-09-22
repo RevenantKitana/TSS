@@ -10,10 +10,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 
 import numpy as np
 import soundfile as sf
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from zerotts import ZeroTTS
 from zerotts.chunking import (
@@ -29,6 +36,15 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 
 DEFAULT_MODEL = os.environ.get("ZEROTTS_MODEL", "zeroweight-ai/ZeroTTS")
+_candidate_voices = [
+    os.environ.get("ZEROTTS_VOICES_DIR", None),
+    os.path.join(_ROOT, "Voice_ZeroTTS_model", "voices"),
+    os.path.join(_ROOT, "Voice_ZeroTTS_model"),
+    os.path.join(os.getcwd(), "Voice_ZeroTTS_model", "voices"),
+    os.path.join(os.getcwd(), "Voice_ZeroTTS_model"),
+]
+DEFAULT_VOICES = next((c for c in _candidate_voices if c and os.path.isdir(c)), None)
+
 GENERATED_DIR = os.environ.get("ZEROTTS_OUTPUT_DIR", os.path.join(_ROOT, "outputs", "generated"))
 SAMPLE_TEXTS_PATH = os.path.join(_HERE, "test_samples.txt")
 MAX_TEXT_CHARS = 5000
@@ -43,18 +59,26 @@ os.makedirs(GENERATED_DIR, exist_ok=True)
 _tts: ZeroTTS | None = None
 _silence_frame: np.ndarray | None = None
 _model_id = DEFAULT_MODEL
+_voices_dir = DEFAULT_VOICES
 
 
-def set_model(model_id: str) -> None:
-    global _model_id
+def set_model(model_id: str, voices_dir: str | None = None) -> None:
+    global _model_id, _voices_dir, _tts
+    if _model_id != model_id or (voices_dir is not None and _voices_dir != voices_dir):
+        _tts = None
     _model_id = model_id
+    if voices_dir is not None:
+        _voices_dir = voices_dir
 
 
 def get_tts() -> ZeroTTS:
     global _tts
     if _tts is None:
-        print(f"Loading ZeroTTS from {_model_id} ...")
-        _tts = ZeroTTS.from_pretrained(_model_id)
+        print(f"[ZeroTTS] Loading model from: {_model_id} ...")
+        if _voices_dir:
+            print(f"[ZeroTTS] Loading custom voices from: {_voices_dir} ...")
+        _tts = ZeroTTS.from_pretrained(_model_id, voices_dir=_voices_dir)
+        print(f"[ZeroTTS] Active voices directory: {_tts.voices_root}")
     return _tts
 
 
@@ -91,7 +115,8 @@ def _get_silence_frame(tts: ZeroTTS) -> np.ndarray:
 def list_voices() -> list:
     try:
         return get_tts().list_voices()
-    except Exception:
+    except Exception as e:
+        print(f"[ZeroTTS] Warning: Failed to list voices ({e})")
         return []
 
 
@@ -132,10 +157,26 @@ def voice_preview_path(name: str) -> str | None:
         return None
     try:
         voice = get_tts().load_voice(name)
+        if voice.preview_path and os.path.isfile(voice.preview_path):
+            return os.path.abspath(voice.preview_path)
     except Exception:
-        return None
-    path = voice.preview_path
-    return path if path and os.path.isfile(path) else None
+        pass
+
+    try:
+        tts = get_tts()
+        candidates = [
+            os.path.join(str(tts.voices_root), name, "preview.wav"),
+            os.path.join(_ROOT, "Voice_ZeroTTS_model", "voices", name, "preview.wav"),
+            os.path.join(_ROOT, "Voice_ZeroTTS_model", name, "preview.wav"),
+            os.path.join(_ROOT, "ZeroTTS_model", "voices", name, "preview.wav"),
+            os.path.join(_ROOT, "ZeroTTS_model", name, "preview.wav"),
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return os.path.abspath(c)
+    except Exception:
+        pass
+    return None
 
 
 def voice_display_name(name: str) -> str:

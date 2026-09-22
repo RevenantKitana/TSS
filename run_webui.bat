@@ -107,6 +107,14 @@ rem 5. Khoi chay Web UI hoan toan bang mo hinh local tai cho
 echo * Dang mo Web UI che do Offline bang mo hinh local trong ZeroTTS_model...
 echo * Dia chi truy cap: http://localhost:7860  hoac  http://127.0.0.1:7860
 echo.
-"%PY_CMD%" webui/server.py --model ./ZeroTTS_model
+set "VOICE_ARG="
+if exist "Voice_ZeroTTS_model\voices" (
+    set "VOICE_ARG=--voices ./Voice_ZeroTTS_model/voices"
+    echo * Su dung cac mau giong tu thu muc: Voice_ZeroTTS_model\voices
+) else if exist "Voice_ZeroTTS_model" (
+    set "VOICE_ARG=--voices ./Voice_ZeroTTS_model"
+    echo * Su dung cac mau giong tu thu muc: Voice_ZeroTTS_model
+)
+"%PY_CMD%" webui/server.py --model ./ZeroTTS_model %VOICE_ARG%
 
 pause

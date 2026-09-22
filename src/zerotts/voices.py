@@ -71,10 +71,19 @@ class Voice:
         return list(self.meta.get("tags", []))
 
 
+def resolve_voices_root(voices_root: str | Path) -> Path:
+    """Ensure voices_root points to the directory directly containing voice subfolders."""
+    root = Path(voices_root)
+    if (root / "voices").is_dir() and not any((d / "voice.npz").exists() for d in root.iterdir() if d.is_dir()):
+        return root / "voices"
+    return root
+
+
 def _voice_dirs(voices_root: Path):
-    if not voices_root.is_dir():
+    root = resolve_voices_root(voices_root)
+    if not root.is_dir():
         return []
-    return sorted(d for d in voices_root.iterdir() if d.is_dir() and (d / "voice.npz").exists())
+    return sorted(d for d in root.iterdir() if d.is_dir() and (d / "voice.npz").exists())
 
 
 def list_voices(voices_root: str | Path) -> list:
@@ -90,7 +99,7 @@ def load_voice(voices_root: str | Path, name: str, expect_queries: int | None = 
     dtype and rank, so they would feed the graph cleanly and produce confident
     nonsense.
     """
-    root = Path(voices_root)
+    root = resolve_voices_root(Path(voices_root))
     vdir = root / name
     npz = vdir / "voice.npz"
     if not npz.exists():
@@ -117,12 +126,12 @@ def load_voice(voices_root: str | Path, name: str, expect_queries: int | None = 
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     preview = vdir / "preview.wav"
     return Voice(name=name, emb=emb, meta=meta,
-                 preview_path=str(preview) if preview.exists() else None)
+                 preview_path=str(preview.resolve()) if preview.exists() else None)
 
 
 def load_index(voices_root: str | Path) -> dict:
     """The ``index.json`` manifest, or a minimal one synthesized from the dirs."""
-    root = Path(voices_root)
+    root = resolve_voices_root(Path(voices_root))
     index_path = root / "index.json"
     if index_path.exists():
         return json.loads(index_path.read_text(encoding="utf-8"))
