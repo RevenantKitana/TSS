@@ -13,17 +13,32 @@ Hệ thống đã được thiết lập để bạn có thể mang **chính xá
 
 ---
 
-## 🚀 Bước 2: Chạy Trên Google Colab
+## 🚀 Bước 2: Chọn Bản Google Colab Phù Hợp
 
-### Cách 1 (Khuyên dùng - Nhanh nhất): Nạp Trực Tiếp Từ GitHub hoặc Google Drive
-1. Mở [Google Colab](https://colab.research.google.com) và mở file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) (hoặc nạp link GitHub `https://github.com/RevenantKitana/TSS`).
+Dự án cung cấp **2 phiên bản Notebook** tùy theo nhu cầu sử dụng của bạn:
+
+| Phiên Bản | File Notebook | Mục Đích Sử Dụng |
+| :--- | :--- | :--- |
+| **Bản 1: WebUI Studio (Đầy đủ giao diện)** | [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) | Dành cho người muốn giao diện Web Studio trực quan, tạo đường hầm Cloudflare Tunnel mở trên trình duyệt. |
+| **Bản 2: Headless / Batch (Không Frontend)** | [`ZeroTTS_Colab_Headless.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_Headless.ipynb) | Dành cho người muốn chạy trực tiếp trong Colab, nghe audio ngay tại cell, render kịch bản (.docx/.txt) hàng loạt vào Google Drive mà không cần mở WebUI. |
+
+---
+
+### Hướng Dẫn Chạy Bản 2: Headless / Trực Tiếp (Không Cần Frontend)
+1. Mở file [`ZeroTTS_Colab_Headless.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_Headless.ipynb) trên Google Colab.
+2. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
+3. Chạy lần lượt các bước:
+   - **Bước 1 -> Bước 4**: Kết nối Google Drive, cài đặt ONNX Runtime GPU và nạp mô hình.
+   - **Bước 5**: Nhập chữ và bấm nghe thử trực tiếp âm thanh sinh ra ngay trong notebook (`IPython.display.Audio`).
+   - **Bước 6 & Bước 7**: Tải kịch bản (.docx / .txt) lên Google Drive, chạy render dự án theo tag `$[Thư_mục]`, `[Câu 1]`, `#[Bỏ qua]`, `[pause: 1.5s]` và tự động nối file `_FULL_MERGED.mp3`.
+
+---
+
+### Hướng Dẫn Chạy Bản 1: WebUI Studio (Kèm Giao Diện Web)
+1. Mở file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) trên Google Colab.
 2. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
 3. Chọn **Runtime** -> **Run all (Chạy tất cả)**:
-   - Colab sẽ tự đồng bộ mã nguồn và thư mục `Voice_ZeroTTS_model/voices`, tải model weights và khởi động server.
-   - Khi chạy đến **Bước 5**, bạn chỉ cần bấm vào đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
-
-### Cách 2: Tải lên trực tiếp từ máy tính trong Colab
-- Nếu chưa tải file zip lên Google Drive, khi chạy đến **Bước 2** trong Notebook, một nút **Choose Files (Chọn tệp)** sẽ xuất hiện. Bạn chỉ cần bấm vào và chọn file `TSS_Code.zip` từ máy tính.
+   - Khi chạy đến **Bước 5**, bấm vào đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
 
 ---
 
