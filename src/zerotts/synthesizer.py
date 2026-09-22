@@ -72,14 +72,13 @@ def _setup_cuda_environment():
     except Exception:
         pass
 
-    extra_paths = [
+    # Only look in dedicated CUDA/NVIDIA library folders
+    nvidia_paths = [
         "/usr/local/cuda/lib64",
         "/usr/local/cuda/targets/x86_64-linux/lib",
         "/usr/lib64-nvidia",
-        "/usr/lib/x86_64-linux-gnu",
     ]
 
-    # Dynamically scan site-packages for nvidia CUDA/cuDNN wheel libraries
     for p in list(sys.path) + [
         "/usr/local/lib/python3.10/dist-packages",
         "/usr/local/lib/python3.11/dist-packages",
@@ -92,12 +91,12 @@ def _setup_cuda_environment():
         if os.path.isdir(nvidia_dir):
             for sub in os.listdir(nvidia_dir):
                 lib_dir = os.path.join(nvidia_dir, sub, "lib")
-                if os.path.isdir(lib_dir) and lib_dir not in extra_paths:
-                    extra_paths.append(lib_dir)
+                if os.path.isdir(lib_dir) and lib_dir not in nvidia_paths:
+                    nvidia_paths.append(lib_dir)
 
     current_ld = os.environ.get("LD_LIBRARY_PATH", "")
     existing_parts = current_ld.split(":") if current_ld else []
-    new_parts = [p for p in extra_paths if os.path.isdir(p) and p not in existing_parts]
+    new_parts = [p for p in nvidia_paths if os.path.isdir(p) and p not in existing_parts]
     if new_parts:
         all_parts = new_parts + existing_parts
         os.environ["LD_LIBRARY_PATH"] = ":".join(all_parts)
@@ -105,34 +104,26 @@ def _setup_cuda_environment():
     if sys.platform.startswith("linux"):
         try:
             import ctypes
-            all_so = []
-            for p in extra_paths:
-                if os.path.isdir(p):
-                    for fname in os.listdir(p):
-                        if ".so" in fname:
-                            all_so.append(os.path.join(p, fname))
-
-            def _lib_priority(path: str) -> int:
-                fn = os.path.basename(path).lower()
-                if "cudart" in fn or "nvjitlink" in fn or "nvrtc" in fn:
-                    return 0
-                if "cublaslt" in fn:
-                    return 1
-                if "cublas" in fn or "cufft" in fn or "curand" in fn or "cusparse" in fn:
-                    return 2
-                if "cudnn_ops" in fn or "cudnn_adv" in fn or "cudnn_cnn" in fn:
-                    return 3
-                if "cudnn" in fn:
-                    return 4
-                return 5
-
-            all_so.sort(key=_lib_priority)
-            for _pass in range(3):
-                for fpath in all_so:
-                    try:
-                        ctypes.CDLL(fpath, mode=ctypes.RTLD_GLOBAL)
-                    except Exception:
-                        pass
+            cuda_target_names = (
+                "libcudart",
+                "libnvjitlink",
+                "libnvrtc",
+                "libcublas",
+                "libcufft",
+                "libcurand",
+                "libcusparse",
+                "libcusolver",
+                "libcudnn",
+            )
+            for p in nvidia_paths:
+                if not os.path.isdir(p):
+                    continue
+                for fname in os.listdir(p):
+                    if any(fname.startswith(prefix) for prefix in cuda_target_names) and (".so" in fname):
+                        try:
+                            ctypes.CDLL(os.path.join(p, fname), mode=ctypes.RTLD_GLOBAL)
+                        except Exception:
+                            pass
         except Exception:
             pass
 
