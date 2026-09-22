@@ -88,6 +88,36 @@ def _get_silence_frame(tts: ZeroTTS) -> np.ndarray:
 
 # ── voices ───────────────────────────────────────────────────────────────────
 
+VOICE_ALIASES = {
+    "nam-mien-bac": "giahuy",
+    "nu-mien-bac": "maichi",
+    "nam-mien-nam": "giahuy",
+    "nu-mien-nam": "maichi",
+    "nu-tin-tuc": "baotrang",
+    "nu-truyen-cam": "kimoanh",
+    "nu-hoat-hinh": "hamy",
+    "nam-tram": "huuduc",
+    "nam-tin-tuc": "quangminh",
+    "nam-binh-luan": "tiendat",
+    "mai-chi": "maichi",
+    "bao-trang": "baotrang",
+    "kim-oanh": "kimoanh",
+    "ha-my": "hamy",
+    "gia-huy": "giahuy",
+    "huu-duc": "huuduc",
+    "quang-minh": "quangminh",
+    "tien-dat": "tiendat",
+}
+
+
+def normalize_voice_name(name: str | None) -> str | None:
+    """Normalize legacy or alias voice names to exact ZeroTTS voice pack IDs."""
+    if not name:
+        return None
+    clean = str(name).strip().lower()
+    return VOICE_ALIASES.get(clean, clean)
+
+
 def list_voices() -> list:
     try:
         return get_tts().list_voices()
@@ -130,6 +160,7 @@ def voice_preview_path(name: str) -> str | None:
     on every dropdown change, and a missing preview is not an error."""
     if not name:
         return None
+    name = normalize_voice_name(name)
     try:
         voice = get_tts().load_voice(name)
     except Exception:
@@ -303,6 +334,7 @@ def generate_stream(
     if use_voice:
         if not voice_name:
             raise ValueError("Please select a voice first.")
+        voice_name = normalize_voice_name(voice_name)
         voice_emb = tts.resolve_voice(voice_name)
     else:
         cfg_scale = 1.0
@@ -853,6 +885,7 @@ def generate_batch_stream(
     if use_voice:
         if not voice_name:
             raise ValueError("Hãy chọn một giọng đọc trước.")
+        voice_name = normalize_voice_name(voice_name)
         voice_emb = tts.resolve_voice(voice_name)
     else:
         cfg_scale = 1.0
