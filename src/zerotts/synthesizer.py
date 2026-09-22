@@ -100,7 +100,18 @@ class ZeroTTS:
         self.text_encoder_sess = _session("text_encoder.onnx")
         
         active_providers = self.prefix_step_sess.get_providers()
-        print(f"[ZeroTTS] ⚡ ONNX Active Providers: {active_providers}")
+        if "CUDAExecutionProvider" in active_providers:
+            import subprocess
+            try:
+                gpu_name = subprocess.check_output(
+                    ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                    stderr=subprocess.DEVNULL
+                ).decode("utf-8").strip()
+                print(f"[ZeroTTS] 🚀 GPU TĂNG TỐC: Đang chạy trên GPU [{gpu_name}] qua CUDAExecutionProvider!")
+            except Exception:
+                print(f"[ZeroTTS] 🚀 GPU TĂNG TỐC: Đã kích hoạt CUDAExecutionProvider thành công!")
+        else:
+            print(f"[ZeroTTS] ℹ️ CPU CHẾ ĐỘ: Đang sử dụng CPUExecutionProvider. (Nếu có GPU, hãy kiểm tra lại onnxruntime-gpu).")
 
         self.num_codebooks = int(config["num_codebooks"])
         self.codebook_size = int(config["codebook_size"])
