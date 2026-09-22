@@ -1,0 +1,37 @@
+$[An_toàn_nghiệp_vụ]
+
+[Text 1] An toàn lao động là một trong những yêu cầu quan trọng trong quá trình làm việc. Trước khi bắt đầu công việc, người lao động cần kiểm tra khu vực làm việc và xác định những yếu tố có thể gây mất an toàn.
+
+[Text 2] Tiếp theo, hãy kiểm tra đầy đủ các thiết bị bảo hộ cá nhân. Mũ bảo hộ, kính bảo hộ, găng tay và giày bảo hộ cần được sử dụng đúng mục đích và phù hợp với công việc.
+
+[Text 3] Khi sử dụng máy móc, thiết bị, người lao động cần đọc kỹ hướng dẫn và kiểm tra tình trạng thiết bị trước khi vận hành. Không tự ý sử dụng thiết bị khi chưa được hướng dẫn hoặc chưa có đủ điều kiện an toàn.
+
+[Text 4] Trong quá trình làm việc, hãy luôn quan sát môi trường xung quanh. Nếu phát hiện nguy cơ mất an toàn, cần dừng công việc và thông báo cho người phụ trách để có biện pháp xử lý phù hợp.
+
+[Text 5] Hãy nhớ rằng, tuân thủ các quy định về an toàn không chỉ giúp bảo vệ bản thân mà còn góp phần bảo vệ những người đang làm việc xung quanh.
+
+
+$[Kỹ_năng_giao_tiếp]
+
+[Text 1] Giao tiếp hiệu quả bắt đầu từ những điều rất đơn giản, chẳng hạn như một lời chào đúng lúc. Khi gặp người khác, hãy chủ động chào hỏi với thái độ lịch sự và thân thiện.
+
+[Text 2] Khi trò chuyện, hãy tập trung lắng nghe người đối diện. Không ngắt lời khi người khác đang nói và nên đặt câu hỏi khi cần làm rõ thông tin.
+
+[Text 3] Cách lựa chọn từ ngữ cũng rất quan trọng. Hãy sử dụng những lời nói rõ ràng, phù hợp với hoàn cảnh và tôn trọng người nghe.
+
+[Text 4] Khi xảy ra bất đồng, thay vì phản ứng ngay lập tức, hãy bình tĩnh lắng nghe và tìm hiểu nguyên nhân. Một cuộc trao đổi hiệu quả cần hướng đến việc hiểu vấn đề và tìm ra cách giải quyết.
+
+[Text 5] Cuối cùng, hãy nhớ rằng giao tiếp không chỉ là nói. Biết lắng nghe, quan sát và tôn trọng người khác cũng là những kỹ năng giao tiếp quan trọng.
+
+
+$[Kỹ_năng_làm_việc_nhóm]
+
+[Text 1] Làm việc nhóm đòi hỏi mỗi thành viên phải hiểu rõ mục tiêu chung và trách nhiệm của mình. Trước khi bắt đầu, cả nhóm nên thống nhất công việc và thời gian thực hiện.
+
+[Text 2] Khi được giao một nhiệm vụ, hãy chủ động hoàn thành phần việc của mình và thông báo tiến độ cho các thành viên khác. Nếu gặp khó khăn, hãy trao đổi sớm thay vì chờ đến khi công việc bị trì hoãn.
+
+[Text 3] Mỗi thành viên có thể có một cách suy nghĩ khác nhau. Vì vậy, hãy lắng nghe các ý kiến khác biệt và tập trung vào vấn đề thay vì đánh giá cá nhân.
+
+[Text 4] Một nhóm làm việc hiệu quả không có nghĩa là mọi người luôn đồng ý với nhau. Điều quan trọng là các thành viên có thể trao đổi thẳng thắn, tôn trọng lẫn nhau và cùng hướng đến mục tiêu chung.
+
+[Text 5] Khi hoàn thành công việc, cả nhóm nên kiểm tra lại kết quả và rút kinh nghiệm. Những điều học được từ một nhiệm vụ sẽ giúp nhóm phối hợp tốt hơn trong những lần tiếp theo.
