@@ -23,6 +23,13 @@
   const openHistoryFolderBtn = document.getElementById('openHistoryFolderBtn');
   const openOutputFolderBtn = document.getElementById('openOutputFolderBtn');
 
+  const scriptFileInput = document.getElementById('scriptFileInput');
+  const uploadScriptBtn = document.getElementById('uploadScriptBtn');
+  const insertProjectBtn = document.getElementById('insertProjectBtn');
+  const projectQueueSummary = document.getElementById('projectQueueSummary');
+  const queueSummaryText = document.getElementById('queueSummaryText');
+  const queueProjectsList = document.getElementById('queueProjectsList');
+
   const mainTextInput = document.getElementById('mainTextInput');
   const charCount = document.getElementById('charCount');
   const insertPauseBtn = document.getElementById('insertPauseBtn');
@@ -92,9 +99,13 @@
     speed: { cfg: 1.0, temp: 0.7, topk: 20, topp: 0.9, rep: 1.15 },
   };
 
-  const SAMPLE_TEXT = `[Text 1] Xin chào tất cả mọi người! [pause: 1.5s] Chào mừng các bạn đã đến với ZeroTTS.
-[Text 2] Hệ thống này hỗ trợ tạo giọng đọc tiếng Việt mượt mà với tốc độ cực nhanh ngay trên CPU. [pause: 1s]
-[Text 3] Bạn có thể chèn [pause: 2s] để ngắt nghỉ tùy ý và ghép nối tự động thành tệp âm thanh hoàn chỉnh.`;
+  const SAMPLE_MULTI_PROJECT_TEXT = `$[An_toàn_nghiệp_vụ] // Thư mục 1: An toàn lao động
+[Text 1] Chào mừng các bạn đến với khóa đào tạo An toàn lao động. [pause: 1.5s]
+[Text 2] Hãy luôn tuân thủ việc trang bị đồ bảo hộ cá nhân trước khi vào công trường.
+
+$[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
+[Text 1] Giao tiếp hiệu quả là chìa khóa then chốt dẫn tới thành công. [pause: 1s]
+[Text 2] Chúc các bạn có một ngày làm việc tràn đầy năng lượng và hiệu quả!`;
 
   // ── Theme Management ──────────────────────────────────────────────────────
   function initTheme() {
@@ -119,15 +130,166 @@
     });
   }
 
-  // ── Textarea Management ───────────────────────────────────────────────────
+  // ── Textarea & Project Queue Management ───────────────────────────────────
+  function updateProjectQueuePreview() {
+    const text = mainTextInput.value;
+    const projectMatches = text.match(/\$\[(.*?)\]/g) || [];
+    
+    if (!projectQueueSummary || !queueProjectsList) return;
+
+    if (projectMatches.length > 1 || (projectMatches.length === 1 && text.trim().startsWith('$['))) {
+      projectQueueSummary.style.display = 'flex';
+      queueSummaryText.textContent = `Phát hiện ${projectMatches.length} Dự án trong kịch bản (Chuỗi Batch Queue)`;
+      queueProjectsList.innerHTML = '';
+
+      projectMatches.forEach((pm, idx) => {
+        const cleanName = pm.replace(/\$\[|\]/g, '').replace(/(?:\/\/|#).*$/, '').trim();
+        const pill = document.createElement('span');
+        pill.className = 'queue-project-pill';
+        pill.innerHTML = `<span>📁 ${idx + 1}. ${cleanName}</span>`;
+        queueProjectsList.appendChild(pill);
+      });
+    } else {
+      projectQueueSummary.style.display = 'none';
+      queueProjectsList.innerHTML = '';
+    }
+  }
+
   function updateCharCount() {
     const len = mainTextInput.value.length;
     charCount.textContent = `${len} / 5000`;
     charCount.style.color = len > 5000 ? '#ef4444' : '';
     localStorage.setItem('zerotts_saved_text', mainTextInput.value);
+    updateProjectQueuePreview();
   }
 
   mainTextInput.addEventListener('input', updateCharCount);
+
+  // File Upload (.txt / .docx)
+  if (uploadScriptBtn && scriptFileInput) {
+    uploadScriptBtn.addEventListener('click', () => {
+      scriptFileInput.click();
+    });
+
+    scriptFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        await handleUploadedScriptFile(file);
+      }
+      scriptFileInput.value = '';
+    });
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        const base64 = typeof result === 'string' && result.includes(',') ? result.split(',')[1] : result;
+        resolve(base64);
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleUploadedScriptFile(file) {
+    try {
+      uploadScriptBtn.textContent = '⏳ Đang nạp...';
+      const base64Data = await readFileAsBase64(file);
+
+      const res = await fetch('/api/upload-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          content_base64: base64Data,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Không thể đọc tệp');
+      }
+
+      const data = await res.json();
+      if (data.text) {
+        mainTextInput.value = data.text;
+        if (data.default_name && !customNameInput.value.trim() && data.total_projects <= 1) {
+          customNameInput.value = data.default_name;
+        }
+        updateCharCount();
+        mainTextInput.focus();
+        
+        let msg = `Đã nạp file: ${data.filename}`;
+        if (data.total_projects > 1) {
+          msg += ` (${data.total_projects} dự án, ${data.total_blocks} câu)`;
+        } else {
+          msg += ` (${data.total_blocks} câu)`;
+        }
+        progressMessage.textContent = `📄 ${msg}`;
+      }
+    } catch (err) {
+      alert(`Lỗi khi nạp file: ${err.message}`);
+    } finally {
+      uploadScriptBtn.innerHTML = '📁 Nhập file (.txt/.docx)';
+    }
+  }
+
+  // Drag and Drop File Upload
+  const editorCard = document.querySelector('.editor-card');
+  if (editorCard) {
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      editorCard.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editorCard.classList.add('drag-over');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+      editorCard.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editorCard.classList.remove('drag-over');
+      }, false);
+    });
+
+    editorCard.addEventListener('drop', async (e) => {
+      const dt = e.dataTransfer;
+      const file = dt && dt.files && dt.files[0];
+      if (file && (file.name.endsWith('.txt') || file.name.endsWith('.docx') || file.name.endsWith('.md'))) {
+        await handleUploadedScriptFile(file);
+      }
+    }, false);
+  }
+
+  if (insertProjectBtn) {
+    insertProjectBtn.addEventListener('click', () => {
+      const val = mainTextInput.value;
+      const matches = val.match(/\$\[(?:Dự án|Du_an|Project)\s*(\d+)\]/gi) || [];
+      let nextIndex = 1;
+      if (matches.length > 0) {
+        const last = matches[matches.length - 1];
+        const numMatch = last.match(/\d+/);
+        if (numMatch) nextIndex = parseInt(numMatch[0], 10) + 1;
+      } else {
+        const allProjMatches = val.match(/\$\[(.*?)\]/g) || [];
+        nextIndex = allProjMatches.length + 1;
+      }
+      const tagToInsert = `$[Dự án ${nextIndex}]\n[Text 1] `;
+      const start = mainTextInput.selectionStart;
+      const end = mainTextInput.selectionEnd;
+      const textBefore = val.substring(0, start);
+      const textAfter = val.substring(end);
+      const newlineBefore = (start > 0 && val[start - 1] !== '\n') ? '\n\n' : '';
+      
+      mainTextInput.value = textBefore + newlineBefore + tagToInsert + textAfter;
+      mainTextInput.selectionStart = mainTextInput.selectionEnd = start + newlineBefore.length + tagToInsert.length;
+      mainTextInput.focus();
+      updateCharCount();
+    });
+  }
 
   if (clearTextBtn) {
     clearTextBtn.addEventListener('click', () => {
@@ -139,7 +301,7 @@
 
   if (sampleTextBtn) {
     sampleTextBtn.addEventListener('click', () => {
-      mainTextInput.value = SAMPLE_TEXT;
+      mainTextInput.value = SAMPLE_MULTI_PROJECT_TEXT;
       updateCharCount();
       mainTextInput.focus();
     });
@@ -972,13 +1134,24 @@
           setGeneratingState(true, 'Đang sinh audio...', 'busy');
         }
       }
+      if (data.queue && data.queue.total_projects > 1) {
+        const q = data.queue;
+        progressPercent.textContent = `Dự án ${q.project_index}/${q.total_projects}`;
+      } else {
+        progressPercent.textContent = '';
+      }
       if (data.segments) segmentsDetailsBox.textContent = data.segments;
       if (data.file_url) {
         setAudioPlayer(data.file_url, data.file_name);
       }
     } else if (type === 'complete') {
       setGeneratingState(false);
-      progressMessage.textContent = '✅ Đã hoàn thành!';
+      progressPercent.textContent = '';
+      if (data.all_folders && data.all_folders.length > 1) {
+        progressMessage.textContent = `✅ Đã hoàn thành ${data.all_folders.length} dự án: ${data.all_folders.join(', ')}`;
+      } else {
+        progressMessage.textContent = '✅ Đã hoàn thành!';
+      }
       if (data.file_url) {
         setAudioPlayer(data.file_url, data.file_name);
         mainAudioPlayer.play().catch(() => {});
@@ -992,6 +1165,7 @@
       }
     } else if (type === 'error') {
       setGeneratingState(false);
+      progressPercent.textContent = '';
       progressMessage.textContent = `❌ Lỗi: ${data.error}`;
     }
   }

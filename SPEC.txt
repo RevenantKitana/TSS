@@ -1,17 +1,19 @@
-legacy_done { Thiết lập cú pháp đầu vào cho text to audio:
-Input 1 sẽ gồm;
-`
-[Text 1] Details_Text_1
-[Text 2] Details_Text_2
-.....
-`
-và ô nhập tên tùy chọn
+thiết lập cho chạy chuỗi dự án:
+$[Tên folder1] // tên sẽ dùng cho việc tạo tên folder outputs
+    [Text 1] Detail Text 1
+    [Text 2] Detail Text 2
+    ...
+    [Text N] Detail Text N
+    Vd:  Tên folder 1 là:  An toàn_nghiệp_vụ, Text 1 là [Text 1] là [An toàn_nghiệp_vụ-1]...
+Tên folder có thể bao gồm dấu gạch dưới "_" , số và chữ
 
-Output: Lưu trong \outputs\generated\tên_tùy_chọn
-- Từng audio file tên dạng tên_tùy_chọn_index
-- txt file gồm danh sách các [text] dạng
-`
-[name1] [Text 1]
-[name2] [Text 2] }
--------------
-Tính time line đưa vào file _mapping? Ví dụ file 1 có thời lượng a1 thì file 2 bắt đầu từ a1, file 3 bắt đầu từ a2+a1 (ax là dung lượng file)
+Kết quả
+    Outputs
+        [Tên folder1]
+            Các file output liên quan
+        [Tên folder2]....
+
+Đầu vào có thể là 1 file text: lấy tên folder chính là tên txt
+Có thể là 1 file docx: Có nội dung phân phối như trên
+
+Có thể thực hiện ngay trên UI, hoặc ngay trên Colab với các lựa chọn là giọng áp dụng, chế độ mặc định là cân bằng tự nhiên

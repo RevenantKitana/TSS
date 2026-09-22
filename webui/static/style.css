@@ -473,6 +473,75 @@ select.form-control {
   background: var(--zt-brand-soft);
 }
 
+.btn-text.highlight-tool {
+  color: #fff;
+  background: linear-gradient(135deg, var(--zt-brand), var(--accent-purple));
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(244, 83, 12, 0.25);
+}
+
+.btn-text.highlight-tool:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Project Queue Preview Bar */
+.project-queue-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, rgba(244, 83, 12, 0.08), rgba(124, 58, 237, 0.08));
+  border: 1px solid rgba(244, 83, 12, 0.25);
+  border-radius: var(--radius-sm);
+  animation: fadeIn 0.2s ease;
+}
+
+.queue-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--zt-brand);
+}
+
+.queue-summary-text {
+  letter-spacing: -0.01em;
+}
+
+.queue-projects-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.queue-project-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.queue-project-pill .pill-count {
+  background: var(--zt-brand-soft);
+  color: var(--zt-brand);
+  font-size: 0.65rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
 .textarea-container {
   display: flex;
   flex-direction: column;

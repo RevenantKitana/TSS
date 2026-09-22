@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import sys
@@ -72,6 +73,16 @@ class GenerateRequest(BaseModel):
 class ConcatRequest(BaseModel):
     folder_name: str
     merged_format: str = "WAV (PCM)"
+
+
+class ParseRequest(BaseModel):
+    text: str = ""
+    default_name: str = ""
+
+
+class UploadFileRequest(BaseModel):
+    filename: str = ""
+    content_base64: str = ""
 
 
 class OpenFolderRequest(BaseModel):
@@ -205,6 +216,39 @@ async def api_concat(req: ConcatRequest):
     }
 
 
+@app.post("/api/upload-file")
+async def api_upload_file(req: UploadFileRequest):
+    """Read uploaded .txt or .docx file (sent as base64 in JSON) and return extracted text and project hierarchy."""
+    try:
+        content_bytes = base64.b64decode(req.content_base64) if req.content_base64 else b""
+        extracted_text, default_name = engine.read_input_file(content_bytes, filename=req.filename or "")
+        projects = engine.parse_multi_project_blocks(extracted_text, default_name=default_name)
+        total_blocks = sum(len(p.get("blocks", [])) for p in projects)
+        return {
+            "success": True,
+            "filename": req.filename,
+            "default_name": default_name,
+            "text": extracted_text,
+            "projects": projects,
+            "total_projects": len(projects),
+            "total_blocks": total_blocks,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Lỗi đọc tệp: {exc}")
+
+
+@app.post("/api/parse-script")
+async def api_parse_script(req: ParseRequest):
+    """Parse raw text script into project blocks preview."""
+    projects = engine.parse_multi_project_blocks(req.text, default_name=req.default_name)
+    total_blocks = sum(len(p.get("blocks", [])) for p in projects)
+    return {
+        "projects": projects,
+        "total_projects": len(projects),
+        "total_blocks": total_blocks,
+    }
+
+
 # ── Safe Generator Helper for ThreadPoolExecutor ────────────────────────────
 _GEN_FINISHED = object()
 
@@ -261,7 +305,7 @@ async def generate_tts(req: GenerateRequest):
         yield f"event: start\ndata: {json.dumps({'message': 'Bắt đầu quá trình tạo giọng...'})}\n\n"
 
         def _sync_generator():
-            return engine.generate_batch_stream(
+            return engine.generate_projects_queue_stream(
                 text=text,
                 voice_name=req.voice_name,
                 custom_name=req.custom_name,
@@ -289,7 +333,7 @@ async def generate_tts(req: GenerateRequest):
                 if item is _GEN_FINISHED:
                     break
 
-                status_msg, completed_file, segs_text = item
+                status_msg, completed_file, segs_text, queue_meta = item
                 if completed_file:
                     last_file = completed_file
 
@@ -299,11 +343,13 @@ async def generate_tts(req: GenerateRequest):
                     "file_path": last_file,
                     "file_url": f"/api/audio-file?path={urllib.parse.quote(last_file)}" if last_file else None,
                     "file_name": os.path.basename(last_file) if last_file else None,
+                    "queue": queue_meta or {},
                 }
                 yield f"event: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.01)
 
             # Build completion payload safely
+            all_folders = result_container.get("folders", [])
             out_folder = result_container.get("folder_path", "")
             if not out_folder or out_folder == engine.GENERATED_DIR:
                 default_folder = "__legacy__"
@@ -316,9 +362,10 @@ async def generate_tts(req: GenerateRequest):
             details = engine.parse_segment_details(out_folder, default_file)
 
             final_payload = {
-                "status": "✅ Đã hoàn thành!",
+                "status": "✅ Đã hoàn thành toàn bộ dự án!",
                 "folder_path": out_folder,
                 "folder_name": default_folder,
+                "all_folders": [os.path.basename(f) for f in all_folders],
                 "folders": folders,
                 "files": files,
                 "file_path": default_file,

@@ -366,6 +366,14 @@ FORMAT_CHOICES = [
 ]
 
 
+def on_upload_file(file_obj):
+    if not file_obj:
+        return gr.update(), gr.update()
+    file_path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
+    extracted_text, default_name = engine.read_input_file(file_path)
+    return extracted_text, default_name
+
+
 def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat, merged_format,
                 max_chunk_sec, cfg_scale, temperature, topk, topp,
                 repetition_penalty, eoa_extra_frames):
@@ -388,7 +396,7 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
     result: dict = {}
     last_file = None
     try:
-        for status_msg, completed_file, segs_text in engine.generate_batch_stream(
+        for status_msg, completed_file, segs_text, queue_meta in engine.generate_projects_queue_stream(
             text=text, voice_name=voice_name, custom_name=custom_name,
             overwrite_mode=overwrite_mode, auto_concat=auto_concat,
             merged_format=merged_format, max_chunk_sec=max_chunk_sec,
@@ -437,10 +445,16 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
             default_file = file_choices[0][1]
 
     display_target = "Thư mục gốc (Mặc định)" if out_folder == engine.GENERATED_DIR else out_folder
+    all_folders = result.get("folders", [])
+    if len(all_folders) > 1:
+        complete_msg = f"Xong toàn bộ {len(all_folders)} dự án!"
+    else:
+        complete_msg = f"Xong — Đã hoàn thành và lưu vào {display_target}"
+
     yield (
         gr.update(),
         default_file,
-        f"Xong — Đã hoàn thành và lưu vào {display_target}",
+        complete_msg,
         gr.update(choices=folder_choices, value=default_folder),
         gr.update(choices=file_choices, value=default_file),
         gr.update(),
@@ -496,30 +510,36 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
                 text_box = gr.Textbox(
                     value=DEFAULT_TEXT, label=None, show_label=False,
                     lines=7, max_lines=20, container=False,
-                    placeholder="Nhập văn bản tiếng Việt… (Sử dụng [Text 1] để phân đoạn batch)",
+                    placeholder="Nhập văn bản tiếng Việt… (Dùng $[Tên folder] để chạy chuỗi dự án, [Text 1] để phân đoạn batch)",
                 )
                 with gr.Row():
+                    upload_script_file = gr.File(
+                        label="📁 Nạp tệp kịch bản (.txt / .docx)",
+                        file_types=[".txt", ".docx", ".md"],
+                        file_count="single",
+                        scale=3,
+                    )
                     custom_name_box = gr.Textbox(
                         label="Tên thư mục / Tiền tố tùy chọn",
                         placeholder="Ví dụ: du_an_1 (Mặc định: batch_YYYYMMDD_HHMMSS)",
                         scale=3,
                     )
+                with gr.Row():
                     overwrite_mode_radio = gr.Radio(
                         choices=["Ghi đè tất cả (Overwrite All)", "Bỏ qua file đã có (Skip Existing)"],
                         value="Ghi đè tất cả (Overwrite All)",
                         label="Xử lý tệp đã có sẵn",
-                        scale=2,
+                        scale=3,
                     )
-                with gr.Row():
                     auto_concat_checkbox = gr.Checkbox(
                         value=True,
-                        label="🔗 Tự động nối các tệp audio sau khi tạo (Auto-Merge)",
+                        label="🔗 Tự động nối audio (Auto-Merge)",
                         scale=3,
                     )
                     merged_format_dropdown = gr.Dropdown(
                         choices=FORMAT_CHOICES,
                         value="WAV (PCM)",
-                        label="Định dạng tệp nối (Format)",
+                        label="Định dạng tệp nối",
                         scale=2,
                     )
                 with gr.Row(elem_classes="zt-actions"):
@@ -592,21 +612,27 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
     # ── User Guide section ───────────────────────────────────────────────────
     with gr.Accordion("📖 Hướng dẫn sử dụng & Cú pháp Batch Text-to-Audio", open=False, elem_classes="zt-card"):
         gr.Markdown("""
-### 1. Cú pháp ngắt đoạn & Tạo nhiều file audio (Batch Mode)
-Sử dụng thẻ nhãn dạng `[Text 1]`, `[Text 2]`,... để phân tách các câu/đoạn văn bản thành các tệp audio riêng lẻ:
+### 1. Cú pháp Chạy Chuỗi Dự Án (`$[Tên folder]`)
+Sử dụng thẻ `$[Tên folder]` để phân tách kịch bản thành nhiều thư mục dự án riêng biệt trong cùng một lần tạo:
 ```text
-[Text 1] Đây là câu thứ nhất của đoạn 1.
-Đây là câu thứ hai nằm trên dòng mới nhưng không có tag.
-Nó vẫn sẽ được gộp chung vào âm thanh của File 1.
+$[An_toàn_nghiệp_vụ] // Thư mục 1
+[Text 1] Bài học về an toàn lao động.
+[Text 2] Trang bị bảo hộ cá nhân trước khi vào công trường.
 
-[Text 2] Đây là câu đầu tiên của đoạn 2.
-Và đây là câu thứ hai của đoạn 2.
+$[Kỹ_năng_giao_tiếp] // Thư mục 2
+[Text 1] Giao tiếp hiệu quả là chìa khóa then chốt.
 ```
+* **Nhập file (.txt / .docx):** Có thể kéo thả hoặc tải trực tiếp file Word `.docx` hoặc Text `.txt` vào ô "Nạp tệp kịch bản". Nếu file không có thẻ `$[...]`, tên file sẽ tự động được gán làm tên thư mục dự án.
+
+---
+
+### 2. Cú pháp ngắt đoạn & Tạo nhiều file audio trong thư mục ([Text n])
+Sử dụng thẻ nhãn dạng `[Text 1]`, `[Text 2]`,... để phân tách các câu/đoạn thành các tệp audio riêng lẻ:
 * **Lưu ý:** Văn bản xuống dòng Enter bên dưới mỗi nhãn `[...]` sẽ được **gộp chung vào cùng 1 file audio** cho đến khi gặp nhãn `[...]` tiếp theo.
 
 ---
 
-### 2. Cú pháp bỏ qua thủ công (Skip Syntax)
+### 3. Cú pháp bỏ qua thủ công (Skip Syntax)
 Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nhãn để bỏ qua không render âm thanh cho câu đó:
 ```text
 #[Text 2] Đoạn này sẽ bị bỏ qua không tạo audio.
@@ -615,8 +641,8 @@ Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nh
 
 ---
 
-### 3. Tên thư mục xuất & Định dạng tệp nối (Custom Folder & Format)
-* **Tên thư mục tùy chọn:** Nhập tên dự án (ví dụ `kịch_bản_1`). Đầu ra sẽ lưu tại `outputs/generated/kịch_bản_1/`. Nếu để trống sẽ tự đặt tên theo ngày giờ.
+### 4. Tên thư mục xuất & Định dạng tệp nối (Custom Folder & Format)
+* **Cấu trúc lưu:** Mỗi dự án sẽ lưu vào thư mục `outputs/generated/<Tên_Folder>/`.
 * **Chế độ xử lý tệp đã có:**
   * **Ghi đè tất cả (Overwrite All):** Render lại toàn bộ file cũ.
   * **Bỏ qua file đã có (Skip Existing):** Bỏ qua các file audio đã có sẵn trên đĩa (giúp tiếp tục công việc khi rớt mạng/mất điện).
@@ -624,10 +650,9 @@ Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nh
 
 ---
 
-### 4. Nối tệp Audio (Audio Concatenation)
-* **Tự động nối (Auto-Merge):** Đánh tích vào `🔗 Tự động nối các tệp audio sau khi tạo` để tự động tạo tệp gộp ngay khi vừa render xong batch.
+### 5. Nối tệp Audio (Audio Concatenation)
+* **Tự động nối (Auto-Merge):** Đánh tích vào `🔗 Tự động nối audio (Auto-Merge)` để tự động tạo tệp gộp ngay khi vừa render xong batch.
 * **Nối thủ công:** Trong phần **Lịch sử theo Thư mục**, chọn thư mục dự án bất kỳ, chọn định dạng xuất và bấm nút **`🔗 Nối bộ Audio này`**.
-* **Đặc tả tệp nối:** Tệp gộp hoàn chỉnh sẽ đặt tên dạng `<tên_tùy_chọn>_FULL_MERGED.<ext>` và tự động hiển thị ở vị trí ưu tiên `⭐ [TỆP GỘP HOÀN CHỈNH]` trong danh sách.
         """)
 
     # ── templates, below the fold: name + a real preview of the text ─────────
@@ -687,6 +712,9 @@ Thêm ký hiệu `#`, `!`, hoặc từ khóa `skip:` ở trước/trong thẻ nh
             "neither, and the tokenizer collapses whitespace — so an un-rewritten "
             "line break would simply vanish.</sub>"
         )
+
+    upload_script_file.change(fn=on_upload_file, inputs=[upload_script_file],
+                              outputs=[text_box, custom_name_box])
 
     refresh_voices_btn.click(fn=refresh_voices, outputs=[voice_dropdown]).then(
         fn=on_voice_change, inputs=[voice_dropdown],

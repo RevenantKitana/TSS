@@ -36,6 +36,36 @@ Và đây là câu thứ hai của đoạn 2.
 * Nếu phần đầu văn bản có nội dung đứng trước thẻ `[...]` đầu tiên, nội dung đó sẽ được gộp chung (nối vào đầu) câu/đoạn của thẻ `[...]` đầu tiên chứ **không chia thành file Text 1 riêng biệt**.
 * Nếu toàn bộ văn bản không chứa thẻ `[...]` nào, hệ thống gán nhãn mặc định `[Text 1]` cho duy nhất 1 block duy nhất.
 
+### 2.4. Cú pháp Chạy Chuỗi Dự Án & Đa Thư Mục (`$[Tên folder]`)
+Hệ thống hỗ trợ chạy liên tiếp một chuỗi nhiều dự án (Multi-Project Queue) trong cùng một lượt xử lý:
+* **Cú pháp:** Sử dụng tiền tố `$[Tên folder]` (kèm comment tùy chọn `//...`) để bắt đầu một dự án/thư mục mới:
+```text
+$[An_toàn_nghiệp_vụ] // Thư mục dự án 1
+    [Text 1] Bài học về an toàn lao động.
+    [Text 2] Hướng dẫn sử dụng đồ bảo hộ cá nhân.
+
+$[Kỹ_năng_giao_tiếp] // Thư mục dự án 2
+    [Text 1] Kỹ năng giao tiếp và ứng xử.
+    [Text 2] Chúc các bạn làm việc hiệu quả!
+```
+* **Quy tắc đặt tên:** Tên thư mục có thể bao gồm chữ cái (có dấu hoặc không dấu), số, dấu gạch dưới `_`.
+* **Đầu vào đa dạng:**
+  * **Trực tiếp trên UI / Colab:** Dán trực tiếp nội dung văn bản.
+  * **Tệp văn bản (`.txt`):** Nạp từ file `.txt`. Nếu trong file không có thẻ `$[...]`, tên file `.txt` sẽ được tự động lấy làm tên thư mục dự án chính.
+  * **Tệp Word (`.docx`):** Nạp từ file Word `.docx`, tự động trích xuất các đoạn văn và bóc tách cấu trúc dự án.
+* **Cấu trúc kết quả xuất ra:**
+  ```text
+  outputs/generated/
+  ├── [An_toàn_nghiệp_vụ]/
+  │   ├── An_toàn_nghiệp_vụ_01.wav
+  │   ├── An_toàn_nghiệp_vụ_02.wav
+  │   ├── An_toàn_nghiệp_vụ_FULL_MERGED.mp3
+  │   ├── An_toàn_nghiệp_vụ_mapping.txt
+  │   └── info.json
+  └── [Kỹ_năng_giao_tiếp]/
+      └── ...
+  ```
+
 ---
 
 ## 3. CẤU TRÚC ĐẦU RA & QUẢN LÝ THƯ MỤC (OUTPUT STRUCTURE)

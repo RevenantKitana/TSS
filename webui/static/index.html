@@ -119,17 +119,28 @@
             <h2>Soạn thảo văn bản</h2>
           </div>
           <div class="editor-tools">
-            <button id="insertPauseBtn" class="btn-text" title="Chèn thẻ tạm dừng nghỉ [pause: 1.5s]">⏸️ + Nghỉ [pause: 1.5s]</button>
+            <input type="file" id="scriptFileInput" accept=".txt,.docx,.md" style="display: none;">
+            <button id="uploadScriptBtn" class="btn-text highlight-tool" title="Nạp nội dung từ file Text (.txt) hoặc Word (.docx)">📁 Nhập file (.txt/.docx)</button>
+            <button id="insertProjectBtn" class="btn-text" title="Chèn thẻ Chuỗi Dự án $[Tên_Folder]">+$[Dự án]</button>
             <button id="insertTagBtn" class="btn-text" title="Chèn thẻ phân đoạn Batch [Text 1]">+ Thẻ [Text n]</button>
+            <button id="insertPauseBtn" class="btn-text" title="Chèn thẻ tạm dừng nghỉ [pause: 1.5s]">⏸️ + Nghỉ [pause: 1.5s]</button>
             <button id="clearTextBtn" class="btn-text" title="Xoá toàn bộ nội dung">Xoá</button>
-            <button id="sampleTextBtn" class="btn-text" title="Chèn văn bản mẫu">Mẫu</button>
+            <button id="sampleTextBtn" class="btn-text" title="Chèn văn bản mẫu chuỗi dự án">Mẫu</button>
           </div>
         </div>
 
+        <div id="projectQueueSummary" class="project-queue-summary" style="display: none;">
+          <div class="queue-summary-left">
+            <span class="queue-icon">📦</span>
+            <span id="queueSummaryText" class="queue-summary-text">Phát hiện 2 Dự án trong kịch bản</span>
+          </div>
+          <div id="queueProjectsList" class="queue-projects-pills"></div>
+        </div>
+
         <div class="textarea-container">
-          <textarea id="mainTextInput" class="main-textarea" rows="8" placeholder="Nhập văn bản tiếng Việt… (Dùng [pause: 2s] để tạm dừng, dùng [Text 1] để tách file audio riêng biệt)">Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS.</textarea>
+          <textarea id="mainTextInput" class="main-textarea" rows="8" placeholder="Nhập văn bản tiếng Việt… (Dùng $[Tên folder] để chạy chuỗi dự án, dùng [Text 1] để tách file, dùng [pause: 2s] để dừng nghỉ)">Xin chào tất cả mọi người. Giọng nói này được tạo ra bởi ZeroTTS.</textarea>
           <div class="textarea-footer">
-            <span class="hint-text">💡 Dùng <code>[pause: 2s]</code> để dừng nghỉ · Dùng <code>[Text 1]</code> để tách nhiều file audio</span>
+            <span class="hint-text">💡 Dùng <code>$[Tên folder]</code> để chạy chuỗi dự án · Dùng <code>[Text 1]</code> để tách file · Hỗ trợ <code>.docx</code> & <code>.txt</code></span>
             <span id="charCount" class="char-count">65 / 5000</span>
           </div>
         </div>
@@ -407,12 +418,17 @@
             <h4>📥 1. Dữ liệu đầu vào (Input)</h4>
             <ul class="guide-list">
               <li><strong>Văn bản tiếng Việt:</strong> Nhập văn bản có dấu (UTF-8). Hỗ trợ ngắt nghỉ theo dấu câu <code>.</code> <code>,</code> <code>!</code> <code>?</code> <code>...</code> <code>:</code> <code>;</code>.</li>
-              <li><strong>Tách lô (Batch Tagging):</strong> Thêm nhãn <code>[Text 1]</code>, <code>[Text 2]</code> để hệ thống tự động xuất thành các file âm thanh riêng biệt trong cùng 1 lần chạy:
-                <pre><code>[Text 1] Xin chào các bạn.
-[Text 2] Đây là phân đoạn audio thứ hai.</code></pre>
+              <li><strong>Chạy Chuỗi Dự Án ($[Tên folder]):</strong> Dùng thẻ <code>$[Tên folder]</code> để chia nhỏ thành nhiều thư mục dự án trong 1 lần chạy duy nhất:
+                <pre><code>$[An_toàn_nghiệp_vụ]
+[Text 1] Bài học số một về an toàn lao động.
+[Text 2] Hướng dẫn sử dụng thiết bị bảo hộ.
+
+$[Kỹ_năng_giao_tiếp]
+[Text 1] Lời chào và nguyên tắc ứng xử.</code></pre>
               </li>
+              <li><strong>Nhập tệp (.txt / .docx):</strong> Bấm nút <code>📁 Nhập file</code> để nạp nhanh toàn bộ kịch bản từ file Word (.docx) hoặc file Text (.txt). Nếu file không có thẻ <code>$[...]</code>, tên file sẽ được dùng làm tên thư mục chính.</li>
+              <li><strong>Tách câu Batch ([Text n]):</strong> Thêm nhãn <code>[Text 1]</code>, <code>[Text 2]</code>... để xuất thành các tệp audio riêng lẻ.</li>
               <li><strong>Giọng đọc (Voice Pack):</strong> Chọn gói giọng mẫu từ danh sách bên trái hoặc bật chế độ <em>Tự do (Unconditioned)</em>.</li>
-              <li><strong>Thư mục dự án:</strong> Có thể đặt tên thư mục tuỳ chỉnh trong <em>Cấu hình xuất & Tách lô</em> (nếu để trống hệ thống sẽ tạo theo timestamp).</li>
             </ul>
           </div>
 
@@ -420,10 +436,10 @@
           <div class="guide-section">
             <h4>📤 2. Dữ liệu đầu ra (Output)</h4>
             <ul class="guide-list">
-              <li><strong>Thư mục dự án:</strong> Toàn bộ kết quả được lưu tại <code>outputs/&lt;Tên_Dự_Án&gt;/</code>.</li>
-              <li><strong>Tệp phân đoạn:</strong> Các file audio lẻ tương ứng từng tag: <code>0001_Text_1.wav</code>, <code>0002_Text_2.wav</code>,...</li>
-              <li><strong>Tệp ghép nối (Auto-Merged):</strong> Tự động gộp tất cả các phân đoạn thành 1 tệp hoàn chỉnh theo định dạng chọn sẵn: <code>WAV</code>, <code>MP3 (320k/192k/128k)</code>, <code>FLAC</code>, <code>M4A</code>, <code>OGG</code>.</li>
-              <li><strong>Timeline & Metadata:</strong> Thông tin độ dài audio, thời gian sinh, tốc độ thời gian thực (RTF) và bảng chi tiết phân đoạn.</li>
+              <li><strong>Cấu trúc thư mục:</strong> Mỗi dự án được lưu vào thư mục riêng: <code>outputs/&lt;Tên_Folder&gt;/</code>.</li>
+              <li><strong>Tệp phân đoạn:</strong> Các file audio tương ứng từng câu: <code>&lt;Tên_Folder&gt;_01.wav</code>, <code>&lt;Tên_Folder&gt;_02.wav</code>...</li>
+              <li><strong>Tệp ghép nối (Auto-Merged):</strong> Tự động gộp tất cả phân đoạn trong từng thư mục thành tệp <code>&lt;Tên_Folder&gt;_FULL_MERGED.&lt;ext&gt;</code> (WAV, MP3, FLAC, M4A, OGG).</li>
+              <li><strong>Mapping & Timeline:</strong> File <code>&lt;Tên_Folder&gt;_mapping.txt</code> và <code>info.json</code> lưu chi tiết mốc thời gian từng câu phục vụ phát lại.</li>
             </ul>
           </div>
 
