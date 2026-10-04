@@ -190,13 +190,13 @@ optimize_vm() {
     print_banner
     echo -e "${C_BOLD}${C_GREEN}⚡ TỐI ƯU HÓA HỆ ĐIỀU HÀNH & TÀI NGUYÊN VM (ORACLE FREE TIER)${C_RESET}\n"
     
-    # 0. Tinh gọn OS: Tắt tiến trình thừa ngốn RAM
-    echo -e "${C_YELLOW}🧹 0. Tinh gọn OS (Debloat): Vô hiệu hóa tiến trình nền thừa (snapd, multipathd, apport)...${C_RESET}"
-    sudo systemctl stop snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
-    sudo systemctl disable snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
-    sudo systemctl mask multipathd 2>/dev/null || true
+    # 0. Tinh gọn OS: Tắt tiến trình thừa ngốn RAM & CPU ngầm
+    echo -e "${C_YELLOW}🧹 0. Tinh gọn OS (Debloat): Vô hiệu hóa snapd, multipathd, crash reporters & background timers...${C_RESET}"
+    sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+    sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+    sudo systemctl mask snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
     sudo apt-get install -y libjemalloc2 -qq 2>/dev/null || true
-    echo "   ✅ Đã tắt các dịch vụ thừa (Tiết kiệm ~300MB RAM)."
+    echo "   ✅ Đã tắt các dịch vụ thừa (Tiết kiệm ~300MB - 400MB RAM, triệt tiêu giật lag CPU ngầm)."
 
     # 1. Tối ưu Swap & RAM
     echo -e "\n${C_YELLOW}🧠 1. Kiểm tra & Tối ưu Swapfile / Virtual Memory...${C_RESET}"

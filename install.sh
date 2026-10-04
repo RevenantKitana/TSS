@@ -57,11 +57,12 @@ echo -e "${C_GREEN}   ✅ Hoàn tất cài đặt các gói hệ thống.${C_RES
 # ── 2. Tinh gọn OS (Debloat) & Tối ưu hóa RAM, Swap & Kernel BBR ─────────────
 echo -e "${C_YELLOW}⚡ [2/8] Tinh gọn hệ điều hành & Tối ưu hóa tài nguyên phần cứng VM...${C_RESET}"
 
-# 2.1 Debloat dịch vụ thừa ngốn RAM
-echo "   -> Tinh gọn OS: Vô hiệu hóa tiến trình thừa (snapd, multipathd, crash reporting)..."
-sudo systemctl stop snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
-sudo systemctl disable snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
-sudo systemctl mask multipathd 2>/dev/null || true
+# 2.1 Debloat dịch vụ thừa ngốn RAM & CPU
+echo "   -> Tinh gọn OS (Debloat): Vô hiệu hóa snapd, multipathd, crash reporting & background update timers..."
+sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+sudo systemctl mask snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+echo "   ✅ Đã tinh gọn OS (tiết kiệm ~300MB - 400MB RAM và triệt tiêu giật lag CPU ngầm)."
 
 # 2.2 Tạo 4GB Swap nếu chưa đủ
 SWAP_TOTAL=$(free -m | awk '/Swap:/ {print $2}')
