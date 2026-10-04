@@ -32,6 +32,7 @@ for _p in [_ROOT, os.path.join(_ROOT, "src"), _HERE]:
         sys.path.insert(0, _p)
 
 import audio_stream  # noqa: E402
+import auth  # noqa: E402
 import engine  # noqa: E402
 
 _STATIC_DIR = os.path.join(_HERE, "static")
@@ -49,6 +50,30 @@ app.add_middleware(
 
 # Mount gapless live audio streaming route (/zerotts/stream/{sid}.wav)
 audio_stream.mount(app)
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP even behind Cloudflare or Reverse Proxy."""
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+    x_forwarded = request.headers.get("X-Forwarded-For")
+    if x_forwarded:
+        return x_forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+
+def get_auth_context(request: Request, token_param: str | None = None) -> auth.AuthContext:
+    """Extract and verify token from Authorization header or param."""
+    token = token_param
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+        else:
+            token = request.headers.get("X-API-Key") or request.query_params.get("token")
+    client_ip = _get_client_ip(request)
+    return auth.auth_manager.verify_token(token, client_ip=client_ip)
 
 
 # ── Request / Response Models ────────────────────────────────────────────────
@@ -69,6 +94,11 @@ class GenerateRequest(BaseModel):
     repetition_penalty: float = 1.2
     eoa_extra_frames: int = 1
     num_workers: int = Field(1, ge=1, le=16)
+    token: str | None = None
+
+
+class VerifyTokenRequest(BaseModel):
+    token: str = ""
 
 
 class ConcatRequest(BaseModel):
@@ -110,6 +140,43 @@ async def serve_index():
 
 
 # ── REST API Endpoints ───────────────────────────────────────────────────────
+
+@app.get("/api/auth/status")
+async def get_auth_status(request: Request, token: str | None = None):
+    """Return user tier, limits, and remaining quota."""
+    ctx = get_auth_context(request, token)
+    return {
+        "tier": ctx.tier,
+        "name": ctx.name,
+        "max_chars": ctx.max_chars,
+        "hourly_limit": ctx.hourly_limit,
+        "remaining_quota": ctx.remaining_quota,
+        "is_master": ctx.is_master,
+        "is_vip": ctx.is_vip,
+    }
+
+
+@app.post("/api/auth/verify")
+async def verify_auth_token(req: VerifyTokenRequest, request: Request):
+    """Verify submitted VIP/Master token."""
+    token = req.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Vui lòng nhập mã Token.")
+    ctx = auth.auth_manager.verify_token(token, client_ip=_get_client_ip(request))
+    if ctx.tier == "guest":
+        raise HTTPException(status_code=401, detail="Mã Token không hợp lệ hoặc đã hết hạn.")
+    return {
+        "success": True,
+        "tier": ctx.tier,
+        "name": ctx.name,
+        "max_chars": ctx.max_chars,
+        "hourly_limit": ctx.hourly_limit,
+        "remaining_quota": ctx.remaining_quota,
+        "is_master": ctx.is_master,
+        "is_vip": ctx.is_vip,
+        "message": f"Chào mừng {ctx.name}! Bạn đang sử dụng cấp bậc {ctx.tier.upper()}."
+    }
+
 
 @app.get("/api/voices")
 async def get_voices():
@@ -286,13 +353,28 @@ if sys.platform == "win32":
 # ── Server-Sent Events (SSE) Generation Endpoint ─────────────────────────────
 
 @app.post("/api/generate")
-async def generate_tts(req: GenerateRequest):
+async def generate_tts(req: GenerateRequest, request: Request):
     """Stream synthesis progress & live audio stream via Server-Sent Events (SSE)."""
     text = (req.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Vui lòng nhập văn bản cần chuyển đổi.")
-    if len(text) > engine.MAX_TEXT_CHARS:
-        raise HTTPException(status_code=400, detail=f"Văn bản quá dài ({len(text)} ký tự, tối đa {engine.MAX_TEXT_CHARS}).")
+
+    client_ip = _get_client_ip(request)
+    auth_ctx = get_auth_context(request, req.token)
+
+    # 1. Enforce Tier Character Limits
+    if len(text) > auth_ctx.max_chars:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Văn bản ({len(text):,} ký tự) vượt quá giới hạn của cấp bậc {auth_ctx.tier.upper()} (tối đa {auth_ctx.max_chars:,} ký tự). Hãy rút ngắn hoặc nhập VIP/Master Key."
+        )
+
+    # 2. Enforce Hourly Rate Limits
+    if auth_ctx.remaining_quota <= 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Bạn đã sử dụng hết hạn mức {auth_ctx.hourly_limit} lượt tạo trong 1 giờ. Vui lòng thử lại sau hoặc nhập VIP Key."
+        )
 
     use_voice = req.mode == "voice"
     if use_voice and not req.voice_name:
@@ -303,7 +385,7 @@ async def generate_tts(req: GenerateRequest):
         last_file = None
         
         # Start SSE stream
-        yield f"event: start\ndata: {json.dumps({'message': 'Bắt đầu quá trình tạo giọng...'})}\n\n"
+        yield f"event: start\ndata: {json.dumps({'message': 'Đang kết nối tới động cơ ZeroTTS...', 'tier': auth_ctx.tier})}\n\n"
 
         def _sync_generator():
             return engine.generate_projects_queue_stream(
@@ -326,29 +408,37 @@ async def generate_tts(req: GenerateRequest):
             )
 
         loop = asyncio.get_running_loop() if hasattr(asyncio, "get_running_loop") else asyncio.get_event_loop()
-        gen = _sync_generator()
 
+        # Guard inference with Concurrency Semaphore (1 worker on single core)
         try:
-            while True:
-                # Run generator step safely in threadpool
-                item = await loop.run_in_executor(None, _safe_generator_next, gen)
-                if item is _GEN_FINISHED:
-                    break
+            if auth.auth_manager.inference_semaphore.locked():
+                yield f"event: progress\ndata: {json.dumps({'status': '⏳ Đang trong hàng đợi xử lý CPU... Vui lòng đợi trong giây lát.', 'segments': '', 'file_path': None, 'file_url': None, 'file_name': None, 'queue': {}}, ensure_ascii=False)}\n\n"
 
-                status_msg, completed_file, segs_text, queue_meta = item
-                if completed_file:
-                    last_file = completed_file
+            async with auth.auth_manager.inference_semaphore:
+                gen = _sync_generator()
+                while True:
+                    # Run generator step safely in threadpool
+                    item = await loop.run_in_executor(None, _safe_generator_next, gen)
+                    if item is _GEN_FINISHED:
+                        break
 
-                payload = {
-                    "status": status_msg,
-                    "segments": segs_text,
-                    "file_path": last_file,
-                    "file_url": f"/api/audio-file?path={urllib.parse.quote(last_file)}" if last_file else None,
-                    "file_name": os.path.basename(last_file) if last_file else None,
-                    "queue": queue_meta or {},
-                }
-                yield f"event: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.01)
+                    status_msg, completed_file, segs_text, queue_meta = item
+                    if completed_file:
+                        last_file = completed_file
+
+                    payload = {
+                        "status": status_msg,
+                        "segments": segs_text,
+                        "file_path": last_file,
+                        "file_url": f"/api/audio-file?path={urllib.parse.quote(last_file)}" if last_file else None,
+                        "file_name": os.path.basename(last_file) if last_file else None,
+                        "queue": queue_meta or {},
+                    }
+                    yield f"event: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.01)
+
+                # Record usage upon success
+                auth.auth_manager.record_usage(auth_ctx, len(text), client_ip=client_ip)
 
             # Build completion payload safely
             all_folders = result_container.get("folders", [])

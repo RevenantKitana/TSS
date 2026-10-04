@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-04 15:46:29",
+  "keys": {
+    "zk_master_e3d7c15864f1b897b5d65de5": {
+      "key": "zk_master_e3d7c15864f1b897b5d65de5",
+      "name": "Admin (Chính chủ)",
+      "tier": "master",
+      "max_chars": 100000,
+      "hourly_limit": 999999,
+      "priority": 10,
+      "created_at": "2026-10-04 15:46:08",
+      "expires_at": null,
+      "total_used": 0,
+      "last_used": "",
+      "is_active": true
+    },
+    "zk_vip_6c15d8ff68fd3653f15d": {
+      "key": "zk_vip_6c15d8ff68fd3653f15d",
+      "name": "Recruiter Demo",
+      "tier": "vip",
+      "max_chars": 2000,
+      "hourly_limit": 50,
+      "priority": 5,
+      "created_at": "2026-10-04 15:46:29",
+      "expires_at": "2026-11-03 15:46:29",
+      "total_used": 0,
+      "last_used": "",
+      "is_active": true
+    }
+  }
+}

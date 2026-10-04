@@ -160,6 +160,10 @@ class ZeroTTS:
         config = hub.load_config(model_dir)
         self.config = config
 
+        if intra_op_num_threads is None or intra_op_num_threads == 4:
+            available_cpus = os.cpu_count() or 1
+            intra_op_num_threads = max(1, min(4, available_cpus))
+
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.intra_op_num_threads = intra_op_num_threads

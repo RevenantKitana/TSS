@@ -32,6 +32,13 @@
     </div>
 
     <div class="header-right">
+      <div id="tierBadge" class="status-pill tier-pill tier-guest" title="Hạn mức sử dụng">
+        <span class="tier-icon">👤</span>
+        <span id="tierText">Khách (200 ký tự)</span>
+      </div>
+      <button id="authModalBtn" class="btn-text highlight-tool" title="Nhập Access Key / VIP Token">
+        <span>🔑 Nhập Key</span>
+      </button>
       <div id="systemStatus" class="status-pill status-ready">
         <span class="status-dot"></span>
         <span id="systemStatusText">Sẵn sàng</span>
@@ -135,6 +142,14 @@
             <span id="queueSummaryText" class="queue-summary-text">Phát hiện 2 Dự án trong kịch bản</span>
           </div>
           <div id="queueProjectsList" class="queue-projects-pills"></div>
+        </div>
+
+        <div class="demo-presets-bar">
+          <span class="preset-label">⚡ Câu mẫu thử nhanh:</span>
+          <button type="button" class="btn-preset" data-text="Xin chào! Đây là bản thử nghiệm giọng đọc trí tuệ nhân tạo ZeroTTS tiếng Việt.">👋 Chào hỏi</button>
+          <button type="button" class="btn-preset" data-text="Hôm nay thị trường tài chính ghi nhận phiên tăng điểm ấn tượng nhờ dòng tiền mạnh mẽ.">📰 Bản tin</button>
+          <button type="button" class="btn-preset" data-text="Ngày xửa ngày xưa, ở một ngôi làng nhỏ bên bìa rừng, có một người thợ mộc tốt bụng.">📖 Kể chuyện</button>
+          <button type="button" class="btn-preset" data-text="[Text 1] Xin chào bạn! [Text 2] Cảm ơn bạn đã ghé thăm demo ZeroTTS nhé!">💬 Đối thoại</button>
         </div>
 
         <div class="textarea-container">
@@ -501,6 +516,33 @@ $[Kỹ_năng_giao_tiếp]
       <button id="dismissMobileNoticeBtn" class="btn btn-primary btn-dismiss-notice">
         <span>Vẫn tiếp tục truy cập</span> →
       </button>
+    </div>
+  </div>
+
+  <!-- Auth / Token Management Modal -->
+  <div id="authModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">🔑</span>
+          <h3>Quản lý Access Key / VIP Token</h3>
+        </div>
+        <button id="closeAuthModalBtn" class="btn-icon-small" title="Đóng">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Khách vãng lai được trải nghiệm tối đa <strong>200 ký tự / lần tạo</strong>. Nhập <strong>VIP Token</strong> hoặc <strong>Master Key</strong> từ chính chủ để mở khóa toàn bộ giới hạn và ưu tiên xử lý.
+        </p>
+        <div class="form-group" style="margin-top: 1rem;">
+          <label class="field-label" for="tokenInput">Mã Token / Key của bạn:</label>
+          <input type="password" id="tokenInput" class="form-control" placeholder="zk_master_... hoặc zk_vip_...">
+        </div>
+        <div id="tokenStatusMsg" class="auth-status-banner" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="clearTokenBtn" class="btn btn-secondary">Xóa Key</button>
+        <button id="saveTokenBtn" class="btn btn-primary">Xác thực & Lưu</button>
+      </div>
     </div>
   </div>
 

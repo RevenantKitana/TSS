@@ -89,6 +89,146 @@
 
   const presetRadios = document.querySelectorAll('input[name="preset"]');
 
+  // ── Auth & VIP Token Elements ──────────────────────────────────────────────
+  const tierBadge = document.getElementById('tierBadge');
+  const tierText = document.getElementById('tierText');
+  const authModalBtn = document.getElementById('authModalBtn');
+  const authModal = document.getElementById('authModal');
+  const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+  const tokenInput = document.getElementById('tokenInput');
+  const tokenStatusMsg = document.getElementById('tokenStatusMsg');
+  const saveTokenBtn = document.getElementById('saveTokenBtn');
+  const clearTokenBtn = document.getElementById('clearTokenBtn');
+
+  let currentAuth = {
+    tier: 'guest',
+    name: 'Khách',
+    max_chars: 200,
+    hourly_limit: 6,
+    remaining_quota: 6,
+    is_master: false,
+    is_vip: false,
+    token: localStorage.getItem('zerotts_token') || '',
+  };
+
+  async function fetchAuthStatus() {
+    try {
+      const headers = {};
+      if (currentAuth.token) {
+        headers['Authorization'] = `Bearer ${currentAuth.token}`;
+      }
+      const res = await fetch('/api/auth/status', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        currentAuth.tier = data.tier;
+        currentAuth.name = data.name;
+        currentAuth.max_chars = data.max_chars;
+        currentAuth.hourly_limit = data.hourly_limit;
+        currentAuth.remaining_quota = data.remaining_quota;
+        currentAuth.is_master = data.is_master;
+        currentAuth.is_vip = data.is_vip;
+        updateTierUI();
+      }
+    } catch (e) {
+      console.warn('Auth status check failed:', e);
+    }
+  }
+
+  function updateTierUI() {
+    if (!tierBadge || !tierText) return;
+    if (currentAuth.is_master) {
+      tierBadge.className = 'status-pill tier-pill tier-master';
+      tierText.innerHTML = `👑 Master (${currentAuth.name})`;
+    } else if (currentAuth.is_vip) {
+      tierBadge.className = 'status-pill tier-pill tier-vip';
+      tierText.innerHTML = `⭐ VIP (${currentAuth.name})`;
+    } else {
+      tierBadge.className = 'status-pill tier-pill tier-guest';
+      tierText.innerHTML = `👤 Khách (${currentAuth.max_chars} ký tự)`;
+    }
+    updateCharCount();
+  }
+
+  function openAuthModal() {
+    if (!authModal) return;
+    tokenInput.value = currentAuth.token || '';
+    tokenStatusMsg.style.display = 'none';
+    authModal.style.display = 'flex';
+    tokenInput.focus();
+  }
+
+  function closeAuthModal() {
+    if (authModal) authModal.style.display = 'none';
+  }
+
+  async function verifyAndSaveToken() {
+    const token = tokenInput.value.trim();
+    if (!token) {
+      tokenStatusMsg.className = 'auth-status-banner error';
+      tokenStatusMsg.textContent = 'Vui lòng nhập mã Token.';
+      tokenStatusMsg.style.display = 'block';
+      return;
+    }
+
+    saveTokenBtn.disabled = true;
+    saveTokenBtn.textContent = 'Đang kiểm tra...';
+
+    try {
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Token không hợp lệ.');
+      }
+
+      currentAuth.token = token;
+      localStorage.setItem('zerotts_token', token);
+      currentAuth.tier = data.tier;
+      currentAuth.name = data.name;
+      currentAuth.max_chars = data.max_chars;
+      currentAuth.is_master = data.is_master;
+      currentAuth.is_vip = data.is_vip;
+      updateTierUI();
+
+      tokenStatusMsg.className = 'auth-status-banner success';
+      tokenStatusMsg.textContent = `✅ ${data.message}`;
+      tokenStatusMsg.style.display = 'block';
+
+      setTimeout(closeAuthModal, 1000);
+    } catch (err) {
+      tokenStatusMsg.className = 'auth-status-banner error';
+      tokenStatusMsg.textContent = `❌ ${err.message}`;
+      tokenStatusMsg.style.display = 'block';
+    } finally {
+      saveTokenBtn.disabled = false;
+      saveTokenBtn.textContent = 'Xác thực & Lưu';
+    }
+  }
+
+  function clearToken() {
+    currentAuth.token = '';
+    localStorage.removeItem('zerotts_token');
+    fetchAuthStatus();
+    tokenInput.value = '';
+    tokenStatusMsg.className = 'auth-status-banner';
+    tokenStatusMsg.textContent = 'Đã xóa Key. Bạn đang ở chế độ Khách.';
+    tokenStatusMsg.style.display = 'block';
+    setTimeout(closeAuthModal, 800);
+  }
+
+  if (authModalBtn) authModalBtn.addEventListener('click', openAuthModal);
+  if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
+  if (saveTokenBtn) saveTokenBtn.addEventListener('click', verifyAndSaveToken);
+  if (clearTokenBtn) clearTokenBtn.addEventListener('click', clearToken);
+  if (authModal) {
+    authModal.addEventListener('click', (e) => {
+      if (e.target === authModal) closeAuthModal();
+    });
+  }
+
   // ── Global State ──────────────────────────────────────────────────────────
   let voicesList = [];
   let abortController = null;
@@ -158,13 +298,26 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
 
   function updateCharCount() {
     const len = mainTextInput.value.length;
-    charCount.textContent = `${len} / 5000`;
-    charCount.style.color = len > 5000 ? '#ef4444' : '';
+    const maxChars = currentAuth.max_chars || 200;
+    const maxLabel = currentAuth.is_master ? 'Vô hạn' : `${maxChars.toLocaleString()}`;
+    charCount.textContent = `${len} / ${maxLabel}`;
+    charCount.style.color = (!currentAuth.is_master && len > maxChars) ? '#ef4444' : '';
     localStorage.setItem('zerotts_saved_text', mainTextInput.value);
     updateProjectQueuePreview();
   }
 
   mainTextInput.addEventListener('input', updateCharCount);
+
+  // Demo Presets click handlers
+  document.querySelectorAll('.btn-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.text) {
+        mainTextInput.value = btn.dataset.text;
+        updateCharCount();
+        mainTextInput.focus();
+      }
+    });
+  });
 
   if (workersSelect) {
     const savedWorkers = localStorage.getItem('zerotts_saved_workers');
@@ -1060,12 +1213,18 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
       repetition_penalty: parseFloat(repSlider.value),
       eoa_extra_frames: parseInt(eoaSlider.value, 10),
       num_workers: parseInt(workersSelect ? workersSelect.value : 1, 10),
+      token: currentAuth.token || undefined,
     };
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (currentAuth.token) {
+        headers['Authorization'] = `Bearer ${currentAuth.token}`;
+      }
+
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(payload),
         signal: abortController.signal,
       });
@@ -1256,6 +1415,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
   // ── Initial Boot ──────────────────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    fetchAuthStatus();
     const saved = localStorage.getItem('zerotts_saved_text');
     if (saved) {
       mainTextInput.value = saved;
