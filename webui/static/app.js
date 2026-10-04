@@ -257,7 +257,12 @@
   }
 
   function closeProjectInfoModal() {
-    if (projectInfoModal) projectInfoModal.style.display = 'none';
+    if (projectInfoModal) {
+      projectInfoModal.style.display = 'none';
+      try {
+        localStorage.setItem('zerotts_seen_intro', '1');
+      } catch (_) {}
+    }
   }
 
   if (projectInfoBtn) projectInfoBtn.addEventListener('click', openProjectInfoModal);
@@ -1477,5 +1482,11 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
     } else {
       setAdvancedLocked(true);
     }
+
+    try {
+      if (!localStorage.getItem('zerotts_seen_intro')) {
+        openProjectInfoModal();
+      }
+    } catch (_) {}
   });
 })();
