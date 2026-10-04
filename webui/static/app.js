@@ -274,6 +274,12 @@
     });
   }
 
+  // Expose to window for inline onclick fallbacks
+  window.openProjectInfoModal = openProjectInfoModal;
+  window.closeProjectInfoModal = closeProjectInfoModal;
+  window.openAuthModal = openAuthModal;
+  window.closeAuthModal = closeAuthModal;
+
   // Close modals on Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

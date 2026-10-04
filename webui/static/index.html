@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=2.0">
 </head>
 <body class="dark-theme">
   <!-- Top Navigation Header -->
@@ -36,14 +36,14 @@
         <span class="tier-icon">👤</span>
         <span id="tierText">Khách (200 ký tự)</span>
       </div>
-      <button id="authModalBtn" class="btn-text highlight-tool" title="Nhập Access Key / VIP Token">
+      <button id="authModalBtn" class="btn-text highlight-tool" title="Nhập Access Key / VIP Token" onclick="window.openAuthModal ? window.openAuthModal() : (document.getElementById('authModal').style.display='flex')">
         <span>🔑 Nhập Key</span>
       </button>
       <div id="systemStatus" class="status-pill status-ready">
         <span class="status-dot"></span>
         <span id="systemStatusText">Sẵn sàng</span>
       </div>
-      <button id="projectInfoBtn" class="btn-icon" title="Giới thiệu Dự án & Tác giả gốc">
+      <button id="projectInfoBtn" class="btn-icon" title="Giới thiệu Dự án & Tác giả gốc" onclick="window.openProjectInfoModal ? window.openProjectInfoModal() : (document.getElementById('projectInfoModal').style.display='flex')">
         <span>ℹ️</span>
       </button>
       <button id="themeToggleBtn" class="btn-icon" title="Chuyển đổi Giao diện Sáng/Tối">
@@ -560,7 +560,7 @@ $[Kỹ_năng_giao_tiếp]
             <span class="project-info-subtitle">Hệ thống AI tổng hợp giọng nói tiếng Việt tự nhiên trên CPU</span>
           </div>
         </div>
-        <button id="closeProjectInfoBtn" class="btn-icon-small" title="Đóng">✕</button>
+        <button id="closeProjectInfoBtn" class="btn-icon-small" title="Đóng" onclick="window.closeProjectInfoModal ? window.closeProjectInfoModal() : (document.getElementById('projectInfoModal').style.display='none')">✕</button>
       </div>
 
       <div class="modal-body project-info-body">
@@ -611,13 +611,13 @@ $[Kỹ_năng_giao_tiếp]
       </div>
 
       <div class="modal-footer" style="margin-top: 1rem;">
-        <button id="understandProjectInfoBtn" class="btn btn-primary btn-start-experience">
+        <button id="understandProjectInfoBtn" class="btn btn-primary btn-start-experience" onclick="window.closeProjectInfoModal ? window.closeProjectInfoModal() : (document.getElementById('projectInfoModal').style.display='none')">
           <span>Bắt đầu trải nghiệm</span> 🚀
         </button>
       </div>
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=2.0"></script>
 </body>
 </html>
