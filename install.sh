@@ -30,7 +30,8 @@ echo -e "${C_RESET}"
 
 REPO_URL="https://github.com/RevenantKitana/TSS.git"
 STABLE_COMMIT="027dcd8"
-MODEL_HF_URL="https://huggingface.co/zeroweight/ZeroTTS"
+MODEL_HF_REPO="zeroweight-ai/ZeroTTS"
+MODEL_HF_URL="https://huggingface.co/zeroweight-ai/ZeroTTS"
 INSTALL_DIR="/home/ubuntu/TSS"
 
 # Ensure user ubuntu or current user
@@ -48,15 +49,21 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq \
     git git-lfs python3 python3-venv python3-pip python3-dev \
     ffmpeg libsndfile1 curl wget htop cron ufw libgomp1 build-essential \
-    iptables-persistent netfilter-persistent 2>/dev/null || sudo apt-get install -y git git-lfs python3 python3-venv python3-pip ffmpeg libsndfile1 curl wget htop cron ufw libgomp1 build-essential
+    libjemalloc2 iptables-persistent netfilter-persistent 2>/dev/null || sudo apt-get install -y git git-lfs python3 python3-venv python3-pip ffmpeg libsndfile1 curl wget htop cron ufw libgomp1 build-essential
 
 git lfs install --skip-repo 2>/dev/null || true
 echo -e "${C_GREEN}   ✅ Hoàn tất cài đặt các gói hệ thống.${C_RESET}\n"
 
-# ── 2. Tối ưu hóa OS, RAM, Swap & Kernel BBR ─────────────────────────────────
-echo -e "${C_YELLOW}⚡ [2/8] Kiểm tra & Tối ưu hóa tài nguyên phần cứng VM...${C_RESET}"
+# ── 2. Tinh gọn OS (Debloat) & Tối ưu hóa RAM, Swap & Kernel BBR ─────────────
+echo -e "${C_YELLOW}⚡ [2/8] Tinh gọn hệ điều hành & Tối ưu hóa tài nguyên phần cứng VM...${C_RESET}"
 
-# Tạo 4GB Swap nếu chưa đủ
+# 2.1 Debloat dịch vụ thừa ngốn RAM
+echo "   -> Tinh gọn OS: Vô hiệu hóa tiến trình thừa (snapd, multipathd, crash reporting)..."
+sudo systemctl stop snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+sudo systemctl disable snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+sudo systemctl mask multipathd 2>/dev/null || true
+
+# 2.2 Tạo 4GB Swap nếu chưa đủ
 SWAP_TOTAL=$(free -m | awk '/Swap:/ {print $2}')
 if [ "$SWAP_TOTAL" -lt 2000 ]; then
     echo "   -> Đang tạo 4GB Swapfile..."
@@ -74,7 +81,7 @@ else
     echo "   -> Swapfile hiện có: ${SWAP_TOTAL} MB (Đạt chuẩn)."
 fi
 
-# Cấu hình Kernel Sysctl (TCP BBR, Swappiness 10, IO Buffers)
+# 2.3 Cấu hình Kernel Sysctl (TCP BBR, Swappiness 10, IO Buffers)
 sudo bash -c "cat > /etc/sysctl.d/99-zerotts-optimizations.conf << 'EOF'
 vm.swappiness = 10
 vm.vfs_cache_pressure = 50
@@ -92,7 +99,7 @@ net.ipv4.tcp_tw_reuse = 1
 EOF"
 sudo sysctl --system >/dev/null 2>&1 || true
 
-# Giới hạn Log Systemd 50MB
+# 2.4 Giới hạn Log Systemd 50MB
 sudo mkdir -p /etc/systemd/journald.conf.d/
 sudo bash -c "cat > /etc/systemd/journald.conf.d/size-limit.conf << 'EOF'
 [Journal]
@@ -101,7 +108,7 @@ RuntimeMaxUse=30M
 MaxRetentionSec=7day
 EOF"
 sudo systemctl restart systemd-journald 2>/dev/null || true
-echo -e "${C_GREEN}   ✅ Đã kích hoạt TCP BBR, Swappiness=10 và giới hạn Log 50MB.${C_RESET}\n"
+echo -e "${C_GREEN}   ✅ Đã tinh gọn OS (tiết kiệm ~300MB RAM), bật TCP BBR và Swappiness=10.${C_RESET}\n"
 
 # ── 3. Tải mã nguồn TSS từ GitHub ────────────────────────────────────────────
 echo -e "${C_YELLOW}📥 [3/8] Tải mã nguồn ZeroTTS TSS từ GitHub ($REPO_URL)...${C_RESET}"
@@ -129,14 +136,24 @@ if [ -f "$INSTALL_DIR/requirements.txt" ]; then
 else
     "$VENV_PIP" install fastapi uvicorn onnxruntime soundfile scipy numpy python-docx requests aiofiles psutil huggingface_hub -q
 fi
+"$VENV_PIP" install huggingface_hub -q 2>/dev/null || true
 "$VENV_PIP" install -e "$INSTALL_DIR" -q 2>/dev/null || true
 echo -e "${C_GREEN}   ✅ Đã cấu hình xong môi trường Python & ONNX Runtime.${C_RESET}\n"
 
 # ── 5. Tải Mô hình AI ZeroTTS ────────────────────────────────────────────────
-echo -e "${C_YELLOW}🧠 [5/8] Kiểm tra & Tải mô hình AI ZeroTTS ($MODEL_HF_URL)...${C_RESET}"
+echo -e "${C_YELLOW}🧠 [5/8] Kiểm tra & Tải mô hình AI ZeroTTS ($MODEL_HF_REPO)...${C_RESET}"
 if [ ! -d "$INSTALL_DIR/ZeroTTS_model" ] || [ ! -f "$INSTALL_DIR/ZeroTTS_model/config.json" ]; then
-    echo "   -> Đang tải mô hình ZeroTTS từ HuggingFace (Vui lòng đợi vài phút)..."
-    git clone "$MODEL_HF_URL" "$INSTALL_DIR/ZeroTTS_model"
+    echo "   -> Đang tải trọng số mô hình từ HuggingFace (zeroweight-ai/ZeroTTS)..."
+    "$VENV_PY" -c "
+from huggingface_hub import snapshot_download
+import sys
+try:
+    snapshot_download(repo_id='$MODEL_HF_REPO', local_dir='$INSTALL_DIR/ZeroTTS_model')
+    print('   ✅ Tải hoàn tất qua HuggingFace Hub!')
+except Exception as e:
+    print('   ⚠️ Fallback to git clone:', e)
+    sys.exit(1)
+" 2>/dev/null || git clone "$MODEL_HF_URL" "$INSTALL_DIR/ZeroTTS_model"
 else
     echo "   -> Mô hình ZeroTTS_model đã tồn tại và sẵn sàng."
 fi
@@ -157,6 +174,21 @@ echo -e "${C_GREEN}   ✅ Đã thiết lập cấu trúc lưu trữ và lệnh t
 
 # ── 7. Cấu hình Systemd Service & Cronjob Tự động ────────────────────────────
 echo -e "${C_YELLOW}⚙️ [7/8] Thiết lập Systemd Service (zerotts.service) & Cronjob...${C_RESET}"
+
+# Tìm thư viện jemalloc để tối ưu cấp phát RAM cho Python
+JEMALLOC_PATH=""
+for p in /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/libjemalloc.so.2; do
+    if [ -f "$p" ]; then
+        JEMALLOC_PATH="$p"
+        break
+    fi
+done
+
+ENV_JEMALLOC=""
+if [ -n "$JEMALLOC_PATH" ]; then
+    ENV_JEMALLOC="Environment=\"LD_PRELOAD=$JEMALLOC_PATH\""
+fi
+
 sudo bash -c "cat > /etc/systemd/system/zerotts.service << EOF
 [Unit]
 Description=ZeroTTS Studio Production Server
@@ -170,6 +202,10 @@ Environment=\"PATH=$INSTALL_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sb
 Environment=\"PYTHONUNBUFFERED=1\"
 Environment=\"OMP_NUM_THREADS=1\"
 Environment=\"ONNX_NUM_THREADS=1\"
+Environment=\"OPENBLAS_NUM_THREADS=1\"
+Environment=\"MKL_NUM_THREADS=1\"
+Environment=\"MALLOC_ARENA_MAX=2\"
+$ENV_JEMALLOC
 ExecStart=$INSTALL_DIR/.venv/bin/python webui/server.py --host 0.0.0.0 --port 7860 --model $INSTALL_DIR/ZeroTTS_model
 Restart=always
 RestartSec=5s

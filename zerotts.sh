@@ -33,7 +33,8 @@ C_BG_BLUE="\033[44m"
 # Project Constants
 REPO_URL="https://github.com/RevenantKitana/TSS.git"
 STABLE_COMMIT="027dcd8"
-MODEL_HF_URL="https://huggingface.co/zeroweight/ZeroTTS"
+MODEL_HF_REPO="zeroweight-ai/ZeroTTS"
+MODEL_HF_URL="https://huggingface.co/zeroweight-ai/ZeroTTS"
 DEFAULT_INSTALL_DIR="/home/ubuntu/TSS"
 
 # Resolve working directory
@@ -118,10 +119,19 @@ setup_from_scratch() {
     echo -e "${C_GREEN}   ✅ Đã cấu hình xong môi trường Python.${C_RESET}\n"
 
     # 4. Tải Model AI ZeroTTS
-    echo -e "${C_YELLOW}🧠 4. Kiểm tra mô hình AI ZeroTTS ($MODEL_HF_URL)...${C_RESET}"
+    echo -e "${C_YELLOW}🧠 4. Kiểm tra mô hình AI ZeroTTS ($MODEL_HF_REPO)...${C_RESET}"
     if [ ! -d "$APP_DIR/ZeroTTS_model" ] || [ ! -f "$APP_DIR/ZeroTTS_model/config.json" ]; then
-        echo "   Đang tải ZeroTTS_model từ HuggingFace (khoảng 300MB-500MB)..."
-        git clone "$MODEL_HF_URL" "$APP_DIR/ZeroTTS_model"
+        echo "   Đang tải trọng số mô hình từ HuggingFace (zeroweight-ai/ZeroTTS)..."
+        "$APP_DIR/.venv/bin/python" -c "
+from huggingface_hub import snapshot_download
+import sys
+try:
+    snapshot_download(repo_id='$MODEL_HF_REPO', local_dir='$APP_DIR/ZeroTTS_model')
+    print('   ✅ Tải hoàn tất qua HuggingFace Hub!')
+except Exception as e:
+    print('   ⚠️ Fallback to git clone:', e)
+    sys.exit(1)
+" 2>/dev/null || git clone "$MODEL_HF_URL" "$APP_DIR/ZeroTTS_model"
     else
         echo "   ZeroTTS_model đã tồn tại và sẵn sàng."
     fi
@@ -180,14 +190,22 @@ optimize_vm() {
     print_banner
     echo -e "${C_BOLD}${C_GREEN}⚡ TỐI ƯU HÓA HỆ ĐIỀU HÀNH & TÀI NGUYÊN VM (ORACLE FREE TIER)${C_RESET}\n"
     
+    # 0. Tinh gọn OS: Tắt tiến trình thừa ngốn RAM
+    echo -e "${C_YELLOW}🧹 0. Tinh gọn OS (Debloat): Vô hiệu hóa tiến trình nền thừa (snapd, multipathd, apport)...${C_RESET}"
+    sudo systemctl stop snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+    sudo systemctl disable snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+    sudo systemctl mask multipathd 2>/dev/null || true
+    sudo apt-get install -y libjemalloc2 -qq 2>/dev/null || true
+    echo "   ✅ Đã tắt các dịch vụ thừa (Tiết kiệm ~300MB RAM)."
+
     # 1. Tối ưu Swap & RAM
-    echo -e "${C_YELLOW}🧠 1. Kiểm tra & Tối ưu Swapfile / Virtual Memory...${C_RESET}"
+    echo -e "\n${C_YELLOW}🧠 1. Kiểm tra & Tối ưu Swapfile / Virtual Memory...${C_RESET}"
     SWAP_TOTAL=$(free -m | awk '/Swap:/ {print $2}')
     if [ "$SWAP_TOTAL" -lt 2000 ]; then
         echo "   Swap hiện tại < 2GB. Đang tạo 4GB Swapfile..."
         sudo swapoff -a 2>/dev/null || true
         sudo rm -f /swapfile
-        sudo fallocate -l 4G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
+        sudo fallocate -l 4G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
         sudo chmod 600 /swapfile
         sudo mkswap /swapfile
         sudo swapon /swapfile
@@ -238,16 +256,33 @@ EOF"
     sudo systemctl restart systemd-journald 2>/dev/null || true
     echo "   ✅ Đã giới hạn log systemd tối đa 50MB."
 
-    # 4. Tối ưu OpenMP / ONNX Threading trong Service
-    echo -e "\n${C_YELLOW}⚙️ 4. Tối ưu hóa Threading CPU đơn nhân (OMP_NUM_THREADS=1)...${C_RESET}"
+    # 4. Tối ưu OpenMP / ONNX Threading & Jemalloc trong Service
+    echo -e "\n${C_YELLOW}⚙️ 4. Tối ưu hóa Threading CPU đơn nhân & Giảm phân mảnh RAM...${C_RESET}"
     if [ -f /etc/systemd/system/zerotts.service ]; then
         sudo sed -i '/OMP_NUM_THREADS/d' /etc/systemd/system/zerotts.service
         sudo sed -i '/ONNX_NUM_THREADS/d' /etc/systemd/system/zerotts.service
-        sudo sed -i '/\[Service\]/a Environment="ONNX_NUM_THREADS=1"\nEnvironment="OMP_NUM_THREADS=1"' /etc/systemd/system/zerotts.service
+        sudo sed -i '/OPENBLAS_NUM_THREADS/d' /etc/systemd/system/zerotts.service
+        sudo sed -i '/MKL_NUM_THREADS/d' /etc/systemd/system/zerotts.service
+        sudo sed -i '/MALLOC_ARENA_MAX/d' /etc/systemd/system/zerotts.service
+        sudo sed -i '/LD_PRELOAD/d' /etc/systemd/system/zerotts.service
+        
+        JEMALLOC_PATH=""
+        for p in /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/libjemalloc.so.2; do
+            if [ -f "$p" ]; then
+                JEMALLOC_PATH="$p"
+                break
+            fi
+        done
+        ENV_JEM=""
+        if [ -n "$JEMALLOC_PATH" ]; then
+            ENV_JEM="Environment=\"LD_PRELOAD=$JEMALLOC_PATH\""
+        fi
+
+        sudo sed -i "/\[Service\]/a Environment=\"ONNX_NUM_THREADS=1\"\nEnvironment=\"OMP_NUM_THREADS=1\"\nEnvironment=\"OPENBLAS_NUM_THREADS=1\"\nEnvironment=\"MKL_NUM_THREADS=1\"\nEnvironment=\"MALLOC_ARENA_MAX=2\"\n$ENV_JEM" /etc/systemd/system/zerotts.service
         sudo systemctl daemon-reload
         sudo systemctl restart zerotts
     fi
-    echo "   ✅ Đã tối ưu hóa CPU inference cho nhân ARM."
+    echo "   ✅ Đã tối ưu hóa CPU inference và bộ nhớ cho nhân ARM."
 
     echo -e "${C_BOLD}${C_GREEN}\n🎉 ĐÃ HOÀN TẤT TỐI ƯU HÓA HỆ THỐNG VM!${C_RESET}\n"
     pause_key
