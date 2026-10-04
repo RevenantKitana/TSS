@@ -100,6 +100,19 @@
   const saveTokenBtn = document.getElementById('saveTokenBtn');
   const clearTokenBtn = document.getElementById('clearTokenBtn');
 
+  // ── Project Info & Attribution Modal Elements ──────────────────────────────
+  const projectInfoModal = document.getElementById('projectInfoModal');
+  const projectInfoBtn = document.getElementById('projectInfoBtn');
+  const closeProjectInfoBtn = document.getElementById('closeProjectInfoBtn');
+  const understandProjectInfoBtn = document.getElementById('understandProjectInfoBtn');
+
+  // ── Session ID Management (for Ephemeral Storage Isolation) ────────────────
+  let currentSessionId = localStorage.getItem('zerotts_session_id');
+  if (!currentSessionId) {
+    currentSessionId = 'sess_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    localStorage.setItem('zerotts_session_id', currentSessionId);
+  }
+
   let currentAuth = {
     tier: 'guest',
     name: 'Khách',
@@ -111,13 +124,25 @@
     token: localStorage.getItem('zerotts_token') || '',
   };
 
+  function getApiHeaders(extraHeaders = {}) {
+    const headers = {
+      'X-Session-ID': currentSessionId,
+      ...extraHeaders,
+    };
+    if (currentAuth && currentAuth.token) {
+      headers['Authorization'] = `Bearer ${currentAuth.token}`;
+    }
+    return headers;
+  }
+
+  async function authFetch(url, options = {}) {
+    const headers = getApiHeaders(options.headers || {});
+    return fetch(url, { ...options, headers });
+  }
+
   async function fetchAuthStatus() {
     try {
-      const headers = {};
-      if (currentAuth.token) {
-        headers['Authorization'] = `Bearer ${currentAuth.token}`;
-      }
-      const res = await fetch('/api/auth/status', { headers });
+      const res = await authFetch('/api/auth/status');
       if (res.ok) {
         const data = await res.json();
         currentAuth.tier = data.tier;
@@ -136,15 +161,12 @@
 
   function updateTierUI() {
     if (!tierBadge || !tierText) return;
-    if (currentAuth.is_master) {
-      tierBadge.className = 'status-pill tier-pill tier-master';
-      tierText.innerHTML = `👑 Master (${currentAuth.name})`;
-    } else if (currentAuth.is_vip) {
-      tierBadge.className = 'status-pill tier-pill tier-vip';
-      tierText.innerHTML = `⭐ VIP (${currentAuth.name})`;
+    if (currentAuth.has_key || currentAuth.is_master || currentAuth.is_vip || currentAuth.tier === 'key') {
+      tierBadge.className = 'status-pill tier-pill tier-key';
+      tierText.innerHTML = `🔑 Key: ${currentAuth.name || 'Quản trị'}`;
     } else {
       tierBadge.className = 'status-pill tier-pill tier-guest';
-      tierText.innerHTML = `👤 Khách (${currentAuth.max_chars} ký tự)`;
+      tierText.innerHTML = `👤 Khách (Tối đa ${currentAuth.max_chars || 200} ký tự)`;
     }
     updateCharCount();
   }
@@ -165,7 +187,7 @@
     const token = tokenInput.value.trim();
     if (!token) {
       tokenStatusMsg.className = 'auth-status-banner error';
-      tokenStatusMsg.textContent = 'Vui lòng nhập mã Token.';
+      tokenStatusMsg.textContent = 'Vui lòng nhập mã Key xác thực.';
       tokenStatusMsg.style.display = 'block';
       return;
     }
@@ -174,14 +196,14 @@
     saveTokenBtn.textContent = 'Đang kiểm tra...';
 
     try {
-      const res = await fetch('/api/auth/verify', {
+      const res = await authFetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || 'Token không hợp lệ.');
+        throw new Error(data.detail || 'Key không hợp lệ hoặc đã bị vô hiệu hóa.');
       }
 
       currentAuth.token = token;
@@ -214,7 +236,7 @@
     fetchAuthStatus();
     tokenInput.value = '';
     tokenStatusMsg.className = 'auth-status-banner';
-    tokenStatusMsg.textContent = 'Đã xóa Key. Bạn đang ở chế độ Khách.';
+    tokenStatusMsg.textContent = 'Đã thoát Key. Chuyển về phiên Khách (Giới hạn tài nguyên).';
     tokenStatusMsg.style.display = 'block';
     setTimeout(closeAuthModal, 800);
   }
@@ -228,6 +250,32 @@
       if (e.target === authModal) closeAuthModal();
     });
   }
+
+  // ── Project Info Modal Handlers ───────────────────────────────────────────
+  function openProjectInfoModal() {
+    if (projectInfoModal) projectInfoModal.style.display = 'flex';
+  }
+
+  function closeProjectInfoModal() {
+    if (projectInfoModal) projectInfoModal.style.display = 'none';
+  }
+
+  if (projectInfoBtn) projectInfoBtn.addEventListener('click', openProjectInfoModal);
+  if (closeProjectInfoBtn) closeProjectInfoBtn.addEventListener('click', closeProjectInfoModal);
+  if (understandProjectInfoBtn) understandProjectInfoBtn.addEventListener('click', closeProjectInfoModal);
+  if (projectInfoModal) {
+    projectInfoModal.addEventListener('click', (e) => {
+      if (e.target === projectInfoModal) closeProjectInfoModal();
+    });
+  }
+
+  // Close modals on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAuthModal();
+      closeProjectInfoModal();
+    }
+  });
 
   // ── Global State ──────────────────────────────────────────────────────────
   let voicesList = [];
@@ -515,7 +563,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
   async function loadVoices() {
     try {
       voiceSelect.innerHTML = '<option value="">Đang tải giọng...</option>';
-      const res = await fetch('/api/voices');
+      const res = await authFetch('/api/voices');
       const data = await res.json();
       voicesList = data.voices || [];
 
@@ -582,7 +630,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
   async function loadHistoryFolders(preferredFolder = null, triggerFileSelect = true) {
     if (refreshHistoryBtn) refreshHistoryBtn.classList.add('spinning');
     try {
-      const res = await fetch('/api/history/folders');
+      const res = await authFetch('/api/history/folders');
       const data = await res.json();
       const folders = data.folders || [];
 
@@ -636,7 +684,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
     }
 
     try {
-      const res = await fetch(`/api/history/files?folder=${encodeURIComponent(folder)}`);
+      const res = await authFetch(`/api/history/files?folder=${encodeURIComponent(folder)}`);
       const data = await res.json();
       const files = data.files || [];
 
@@ -687,7 +735,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
     setAudioPlayer(fileUrl, fileName);
 
     // Fetch segment timeline details concurrently in background
-    fetch(`/api/history/details?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(filePath)}`)
+    authFetch(`/api/history/details?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(filePath)}`)
       .then((res) => res.json())
       .then((data) => {
         segmentsDetailsBox.textContent = data.details || 'Không có chi tiết phân đoạn.';
@@ -937,7 +985,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
   historyFolderSelect.addEventListener('input', () => onFolderSelected());
   historyFolderSelect.addEventListener('focus', () => {
     // Light background sync without changing user selection
-    fetch('/api/history/folders')
+    authFetch('/api/history/folders')
       .then((res) => res.json())
       .then((data) => {
         const folders = data.folders || [];
@@ -974,7 +1022,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
       concatBtn.textContent = '⏳ Đang nối...';
 
       try {
-        const res = await fetch('/api/concat', {
+        const res = await authFetch('/api/concat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1009,7 +1057,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
 
   async function openFolder(pathOrName) {
     try {
-      const res = await fetch('/api/open-folder', {
+      const res = await authFetch('/api/open-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_name_or_path: pathOrName }),
@@ -1214,20 +1262,17 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
       eoa_extra_frames: parseInt(eoaSlider.value, 10),
       num_workers: parseInt(workersSelect ? workersSelect.value : 1, 10),
       token: currentAuth.token || undefined,
+      session_id: currentSessionId,
     };
 
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (currentAuth.token) {
-        headers['Authorization'] = `Bearer ${currentAuth.token}`;
-      }
-
-      const response = await fetch('/api/generate', {
+      const response = await authFetch('/api/generate', {
         method: 'POST',
-        headers: headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         signal: abortController.signal,
       });
+
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));

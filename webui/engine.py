@@ -644,16 +644,17 @@ def parse_multi_project_blocks(text: str, default_name: str = "") -> list[dict]:
     return projects
 
 
-def list_generated_folders() -> list[dict]:
-    """Scan GENERATED_DIR for batch folders and legacy root wav files."""
-    if not os.path.isdir(GENERATED_DIR):
+def list_generated_folders(base_dir: str | None = None) -> list[dict]:
+    """Scan base_dir (or GENERATED_DIR) for batch folders and legacy root wav files."""
+    target_base = str(base_dir) if base_dir else GENERATED_DIR
+    if not os.path.isdir(target_base):
         return []
     
     folders = []
     
     # 1. Check for subdirectories (batch runs)
-    subdirs = [os.path.join(GENERATED_DIR, d) for d in os.listdir(GENERATED_DIR)
-               if os.path.isdir(os.path.join(GENERATED_DIR, d))]
+    subdirs = [os.path.join(target_base, d) for d in os.listdir(target_base)
+               if os.path.isdir(os.path.join(target_base, d))]
     
     for sdir in subdirs:
         folder_name = os.path.basename(sdir)
@@ -686,11 +687,11 @@ def list_generated_folders() -> list[dict]:
         })
         
     # 2. Check for legacy single wav files at root
-    root_wavs = [os.path.join(GENERATED_DIR, f) for f in os.listdir(GENERATED_DIR) if f.endswith(".wav")]
+    root_wavs = [os.path.join(target_base, f) for f in os.listdir(target_base) if f.endswith(".wav")]
     if root_wavs:
         folders.append({
             "folder_name": "__legacy__",
-            "folder_path": GENERATED_DIR,
+            "folder_path": target_base,
             "label": f"📁 Mặc định (File lẻ) ({len(root_wavs)} file)",
             "created_at": "",
             "voice": "-",
@@ -702,26 +703,6 @@ def list_generated_folders() -> list[dict]:
     return folders
 
 
-def get_folder_files(folder_name_or_path: str) -> list[dict]:
-    """Return file list items inside a batch folder."""
-    if not folder_name_or_path:
-        return []
-    
-    if folder_name_or_path == "__legacy__":
-        target_dir = GENERATED_DIR
-        wav_files = [os.path.join(target_dir, f) for f in os.listdir(target_dir) if f.endswith(".wav")]
-        wav_files.sort(key=os.path.getmtime, reverse=True)
-        items = []
-        for w in wav_files:
-            meta = generated_meta(w)
-            items.append({
-                "path": w,
-                "label": f"🔊 {os.path.basename(w)} — {meta['text'][:50]}",
-                "text": meta['text'],
-                "voice": meta['voice']
-            })
-        return items
-    
 def get_ffmpeg_path() -> str | None:
     """Find FFmpeg binary path (prefers local ffmpeg/bin/ffmpeg.exe, then system PATH)."""
     local_ffmpeg = os.path.join(_ROOT, "ffmpeg", "bin", "ffmpeg.exe")
@@ -772,13 +753,15 @@ def open_folder(path: str | None) -> str:
 
 
 
-def get_folder_files(folder_name_or_path: str) -> list[dict]:
+def get_folder_files(folder_name_or_path: str, base_dir: str | None = None) -> list[dict]:
     """Return file list items inside a batch folder, featuring _FULL_MERGED.* at the top if present."""
     if not folder_name_or_path:
         return []
     
+    target_base = str(base_dir) if base_dir else GENERATED_DIR
+    
     if folder_name_or_path == "__legacy__":
-        target_dir = GENERATED_DIR
+        target_dir = target_base
         wav_files = [os.path.join(target_dir, f) for f in os.listdir(target_dir) if f.endswith(".wav")]
         wav_files.sort(key=os.path.getmtime, reverse=True)
         items = []
@@ -794,7 +777,7 @@ def get_folder_files(folder_name_or_path: str) -> list[dict]:
     
     target_dir = folder_name_or_path
     if not os.path.isabs(target_dir):
-        target_dir = os.path.join(GENERATED_DIR, folder_name_or_path)
+        target_dir = os.path.join(target_base, folder_name_or_path)
         
     if not os.path.isdir(target_dir):
         return []
@@ -853,6 +836,7 @@ def get_folder_files(folder_name_or_path: str) -> list[dict]:
     return results
 
 
+
 def format_timestamp(seconds: float) -> str:
     if seconds < 0:
         seconds = 0.0
@@ -872,7 +856,7 @@ def format_timestamp(seconds: float) -> str:
     return f"{hrs:02d}:{mins:02d}:{secs:02d}.{millis:03d}"
 
 
-def concat_folder_audio(folder_name_or_path: str, output_format: str = "WAV (PCM)") -> str | None:
+def concat_folder_audio(folder_name_or_path: str, output_format: str = "WAV (PCM)", base_dir: str | None = None) -> str | None:
     """Concatenate segment WAV files inside a batch folder into `<folder_name>_FULL_MERGED.<ext>`.
 
     Supports: WAV (PCM), MP3 (320/192/128 kbps), FLAC, M4A (256 kbps), OGG (192 kbps).
@@ -882,9 +866,10 @@ def concat_folder_audio(folder_name_or_path: str, output_format: str = "WAV (PCM
     if not folder_name_or_path or folder_name_or_path == "__legacy__":
         return None
 
+    target_base = str(base_dir) if base_dir else GENERATED_DIR
     target_dir = folder_name_or_path
     if not os.path.isabs(target_dir):
-        target_dir = os.path.join(GENERATED_DIR, folder_name_or_path)
+        target_dir = os.path.join(target_base, folder_name_or_path)
 
     if not os.path.isdir(target_dir):
         return None
@@ -1084,6 +1069,7 @@ def generate_projects_queue_stream(
     use_voice: bool = True,
     num_workers: int = 1,
     result: dict | None = None,
+    output_root: str | None = None,
 ):
     """Multi-project queue generator processing `$[Folder]` projects and their `[Tag]` blocks.
 
@@ -1092,6 +1078,9 @@ def generate_projects_queue_stream(
     projects = parse_multi_project_blocks(text, default_name=custom_name)
     if not projects or all(not p.get("blocks") for p in projects):
         raise ValueError("Vui lòng nhập văn bản để tổng hợp.")
+
+    target_base_dir = str(output_root) if output_root else GENERATED_DIR
+    os.makedirs(target_base_dir, exist_ok=True)
 
     tts = get_tts()
     voice_emb = None
@@ -1130,12 +1119,12 @@ def generate_projects_queue_stream(
 
             is_single_proj_single_block = (total_projects == 1 and len(blocks) <= 1 and not custom_name)
             if is_single_proj_single_block:
-                out_dir = GENERATED_DIR
+                out_dir = target_base_dir
                 tag_name_clean = sanitize_filename(voice_name or "uncond")
                 folder_tag = proj_name if proj_name else f"{ts_now}_{tag_name_clean}"
             else:
                 folder_tag = proj_name if proj_name else (f"batch_{ts_now}" if total_projects == 1 else f"proj_{p_idx:02d}_{ts_now}")
-                out_dir = os.path.join(GENERATED_DIR, folder_tag)
+                out_dir = os.path.join(target_base_dir, folder_tag)
                 os.makedirs(out_dir, exist_ok=True)
 
             if out_dir not in all_generated_folders:
@@ -1348,12 +1337,12 @@ def generate_projects_queue_stream(
 
             is_single_proj_single_block = (total_projects == 1 and len(blocks) <= 1 and not custom_name)
             if is_single_proj_single_block:
-                out_dir = GENERATED_DIR
+                out_dir = target_base_dir
                 tag_name_clean = sanitize_filename(voice_name or "uncond")
                 folder_tag = proj_name if proj_name else f"{ts_now}_{tag_name_clean}"
             else:
                 folder_tag = proj_name if proj_name else (f"batch_{ts_now}" if total_projects == 1 else f"proj_{p_idx:02d}_{ts_now}")
-                out_dir = os.path.join(GENERATED_DIR, folder_tag)
+                out_dir = os.path.join(target_base_dir, folder_tag)
                 os.makedirs(out_dir, exist_ok=True)
 
             if out_dir not in all_generated_folders:
@@ -1624,19 +1613,20 @@ def generate_batch_stream(
         yield status_msg, last_file, segs_text
 
 
-def parse_segment_details(folder_name_or_path: str | None, active_file_path: str | None = None) -> str:
+def parse_segment_details(folder_name_or_path: str | None, active_file_path: str | None = None, base_dir: str | None = None) -> str:
     """Read and parse info.json, mapping.txt, or .wav.json sidecar files to format segment details.
     
     Format per line: [Tên giọng] [Timeline] [Label] {Voice text}
     - If active_file_path is a FULL_MERGED file, displays full timeline with no single item highlighted.
     - If active_file_path is a specific child file, highlights that item with ▶️ indicator.
     """
+    target_base = str(base_dir) if base_dir else GENERATED_DIR
     if not folder_name_or_path or folder_name_or_path == "__legacy__":
-        target_dir = GENERATED_DIR
+        target_dir = target_base
     elif os.path.isabs(folder_name_or_path):
         target_dir = folder_name_or_path
     else:
-        target_dir = os.path.join(GENERATED_DIR, folder_name_or_path)
+        target_dir = os.path.join(target_base, folder_name_or_path)
 
     active_file_name = os.path.basename(active_file_path) if active_file_path else ""
     is_merged_file = bool(active_file_name and ("_FULL_MERGED." in active_file_name or "_merged." in active_file_name.lower()))

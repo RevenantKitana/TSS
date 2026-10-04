@@ -43,6 +43,9 @@
         <span class="status-dot"></span>
         <span id="systemStatusText">Sẵn sàng</span>
       </div>
+      <button id="projectInfoBtn" class="btn-icon" title="Giới thiệu Dự án & Tác giả gốc">
+        <span>ℹ️</span>
+      </button>
       <button id="themeToggleBtn" class="btn-icon" title="Chuyển đổi Giao diện Sáng/Tối">
         <span class="theme-icon">🌙</span>
       </button>
@@ -525,23 +528,92 @@ $[Kỹ_năng_giao_tiếp]
       <div class="modal-header">
         <div class="modal-title-wrap">
           <span class="modal-icon">🔑</span>
-          <h3>Quản lý Access Key / VIP Token</h3>
+          <h3>Xác thực Access Key Quản trị</h3>
         </div>
         <button id="closeAuthModalBtn" class="btn-icon-small" title="Đóng">✕</button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">
-          Khách vãng lai được trải nghiệm tối đa <strong>200 ký tự / lần tạo</strong>. Nhập <strong>VIP Token</strong> hoặc <strong>Master Key</strong> từ chính chủ để mở khóa toàn bộ giới hạn và ưu tiên xử lý.
+          Do máy chủ vận hành trên hạ tầng hữu hạn, Access Key được sử dụng để <strong>kiểm soát tải CPU, bảo vệ bộ nhớ và chống lạm dụng/spam tài nguyên</strong>. Người dùng chưa có Key sẽ sử dụng chế độ trải nghiệm ngắn.
         </p>
         <div class="form-group" style="margin-top: 1rem;">
-          <label class="field-label" for="tokenInput">Mã Token / Key của bạn:</label>
-          <input type="password" id="tokenInput" class="form-control" placeholder="zk_master_... hoặc zk_vip_...">
+          <label class="field-label" for="tokenInput">Mã Key xác thực:</label>
+          <input type="password" id="tokenInput" class="form-control" placeholder="zk_key_...">
         </div>
         <div id="tokenStatusMsg" class="auth-status-banner" style="display: none;"></div>
       </div>
       <div class="modal-footer">
-        <button id="clearTokenBtn" class="btn btn-secondary">Xóa Key</button>
+        <button id="clearTokenBtn" class="btn btn-secondary">Thoát Key</button>
         <button id="saveTokenBtn" class="btn btn-primary">Xác thực & Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project Info & Original Author Attribution Modal -->
+  <div id="projectInfoModal" class="modal-backdrop" style="display: flex;">
+    <div class="modal-card project-info-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon project-brand-icon">🎙️</span>
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem;">ZeroTTS Studio Mod</h3>
+            <span class="project-info-subtitle">Hệ thống AI tổng hợp giọng nói tiếng Việt tự nhiên trên CPU</span>
+          </div>
+        </div>
+        <button id="closeProjectInfoBtn" class="btn-icon-small" title="Đóng">✕</button>
+      </div>
+
+      <div class="modal-body project-info-body">
+        <!-- Original Research / Foundation -->
+        <div class="info-badge-card original-author-box">
+          <div class="info-badge-header">
+            <span class="badge-tag tag-primary">NỀN TẢNG GỐC</span>
+            <span class="info-badge-title">ZeroTTS (ZeroWeight AI)</span>
+          </div>
+          <p class="info-badge-desc">
+            Mô hình AI Speech Synthesis tiếng Việt độ trễ siêu thấp (Ultra Low-latency), hỗ trợ tạo giọng tự nhiên trực tiếp trên CPU đơn nhân.
+          </p>
+          <div class="info-links-row">
+            <a href="https://zeroweight.ai" target="_blank" rel="noopener" class="link-btn">
+              🌐 Trang chủ: <strong>zeroweight.ai</strong> ↗
+            </a>
+          </div>
+        </div>
+
+        <!-- Mod & Studio Architecture -->
+        <div class="info-badge-card mod-author-box">
+          <div class="info-badge-header">
+            <span class="badge-tag tag-accent">BẢN MOD & TỐI ƯU HÓA</span>
+            <span class="info-badge-title">Nguyễn Quốc Khánh (RevenantKitana)</span>
+          </div>
+          <p class="info-badge-desc">
+            Giao diện Web Studio 3 cột đa năng, phân đoạn kịch bản thông minh, ghép nối tự động, phân quyền Key và cơ chế tự giải phóng bộ nhớ.
+          </p>
+          <div class="info-links-row">
+            <a href="https://k.mio.io.vn" target="_blank" rel="noopener" class="link-btn">
+              ✨ Portfolio: <strong>k.mio.io.vn</strong> ↗
+            </a>
+            <a href="https://github.com/RevenantKitana/TSS" target="_blank" rel="noopener" class="link-btn">
+              💻 GitHub Repo ↗
+            </a>
+          </div>
+        </div>
+
+        <!-- System Resource & Anti-abuse Policy Note -->
+        <div class="info-policy-note">
+          <div class="policy-note-icon">🛡️</div>
+          <div class="policy-note-content">
+            <strong>Bảo vệ tài nguyên & Chống lạm dụng máy chủ:</strong><br>
+            • <strong>Khách trải nghiệm:</strong> Giới hạn 200 ký tự/lần, phiên ngắn tự dọn dẹp sau 30 phút để chống nghẽn CPU và đầy bộ nhớ.<br>
+            • <strong>Access Key:</strong> Dành cho người phát triển / thành viên quản trị để kiểm soát tải và phân phối tài nguyên ổn định.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="margin-top: 1rem;">
+        <button id="understandProjectInfoBtn" class="btn btn-primary btn-start-experience">
+          <span>Bắt đầu trải nghiệm</span> 🚀
+        </button>
       </div>
     </div>
   </div>

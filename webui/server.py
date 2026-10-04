@@ -63,6 +63,11 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "127.0.0.1"
 
 
+def _get_session_id(request: Request) -> str:
+    """Extract session ID from X-Session-ID header or query parameter."""
+    return request.headers.get("X-Session-ID") or request.query_params.get("session_id") or ""
+
+
 def get_auth_context(request: Request, token_param: str | None = None) -> auth.AuthContext:
     """Extract and verify token from Authorization header or param."""
     token = token_param
@@ -95,6 +100,7 @@ class GenerateRequest(BaseModel):
     eoa_extra_frames: int = 1
     num_workers: int = Field(1, ge=1, le=16)
     token: str | None = None
+    session_id: str | None = None
 
 
 class VerifyTokenRequest(BaseModel):
@@ -104,10 +110,13 @@ class VerifyTokenRequest(BaseModel):
 class ConcatRequest(BaseModel):
     folder_name: str
     merged_format: str = "WAV (PCM)"
+    token: str | None = None
+    session_id: str | None = None
 
 
 class ParseRequest(BaseModel):
     text: str = ""
+
     default_name: str = ""
 
 
@@ -143,38 +152,42 @@ async def serve_index():
 
 @app.get("/api/auth/status")
 async def get_auth_status(request: Request, token: str | None = None):
-    """Return user tier, limits, and remaining quota."""
+    """Return user tier, limits, remaining quota, and storage space."""
     ctx = get_auth_context(request, token)
     return {
         "tier": ctx.tier,
         "name": ctx.name,
+        "has_key": ctx.has_key,
+        "storage_slug": ctx.storage_slug,
         "max_chars": ctx.max_chars,
         "hourly_limit": ctx.hourly_limit,
         "remaining_quota": ctx.remaining_quota,
-        "is_master": ctx.is_master,
-        "is_vip": ctx.is_vip,
+        "is_master": ctx.has_key,
+        "is_vip": ctx.has_key,
     }
 
 
 @app.post("/api/auth/verify")
 async def verify_auth_token(req: VerifyTokenRequest, request: Request):
-    """Verify submitted VIP/Master token."""
+    """Verify submitted Access Key."""
     token = req.token.strip()
     if not token:
-        raise HTTPException(status_code=400, detail="Vui lòng nhập mã Token.")
+        raise HTTPException(status_code=400, detail="Vui lòng nhập mã Key.")
     ctx = auth.auth_manager.verify_token(token, client_ip=_get_client_ip(request))
-    if ctx.tier == "guest":
-        raise HTTPException(status_code=401, detail="Mã Token không hợp lệ hoặc đã hết hạn.")
+    if not ctx.has_key:
+        raise HTTPException(status_code=401, detail="Mã Key không hợp lệ hoặc đã bị khóa.")
     return {
         "success": True,
         "tier": ctx.tier,
         "name": ctx.name,
+        "has_key": ctx.has_key,
+        "storage_slug": ctx.storage_slug,
         "max_chars": ctx.max_chars,
         "hourly_limit": ctx.hourly_limit,
         "remaining_quota": ctx.remaining_quota,
-        "is_master": ctx.is_master,
-        "is_vip": ctx.is_vip,
-        "message": f"Chào mừng {ctx.name}! Bạn đang sử dụng cấp bậc {ctx.tier.upper()}."
+        "is_master": True,
+        "is_vip": True,
+        "message": f"Xác thực thành công: {ctx.name} (Không gian riêng: outputs/keys/{ctx.storage_slug}/)."
     }
 
 
@@ -218,33 +231,54 @@ async def get_voice_sample(name: str = Query(...)):
 
 
 @app.get("/api/history/folders")
-async def get_history_folders():
-    """List all generated batch project folders."""
-    folders = engine.list_generated_folders()
-    return {"folders": folders}
+async def get_history_folders(request: Request, token: str | None = None, session_id: str | None = None):
+    """List project folders scoped to current user session."""
+    ctx = get_auth_context(request, token)
+    sid = session_id or _get_session_id(request)
+    user_dir = auth.resolve_output_dir(ctx, sid)
+    folders = engine.list_generated_folders(base_dir=str(user_dir))
+    return {"folders": folders, "tier": ctx.tier, "scoped_dir": str(user_dir)}
 
 
 @app.get("/api/history/files")
-async def get_history_files(folder: str = Query(...)):
-    """List audio files in a specific project folder."""
-    files = engine.get_folder_files(folder)
+async def get_history_files(request: Request, folder: str = Query(...), token: str | None = None, session_id: str | None = None):
+    """List audio files in a specific project folder scoped to user."""
+    ctx = get_auth_context(request, token)
+    sid = session_id or _get_session_id(request)
+    user_dir = auth.resolve_output_dir(ctx, sid)
+    files = engine.get_folder_files(folder, base_dir=str(user_dir))
     return {"files": files}
 
 
 @app.get("/api/history/details")
-async def get_history_details(folder: str = Query(None), file: str = Query(None)):
-    """Parse segment and timeline info for folder / active file."""
-    details = engine.parse_segment_details(folder, file)
+async def get_history_details(request: Request, folder: str = Query(None), file: str = Query(None), token: str | None = None, session_id: str | None = None):
+    """Parse segment and timeline info for folder / active file scoped to user."""
+    ctx = get_auth_context(request, token)
+    sid = session_id or _get_session_id(request)
+    user_dir = auth.resolve_output_dir(ctx, sid)
+    details = engine.parse_segment_details(folder, file, base_dir=str(user_dir))
     return {"details": details}
 
 
 @app.get("/api/audio-file")
-async def get_audio_file(path: str = Query(...)):
-    """Serve any generated audio file from the outputs directory."""
+async def get_audio_file(request: Request, path: str = Query(...)):
+    """Serve any generated audio file from the outputs directory with path traversal protection."""
     clean_path = os.path.abspath(path)
-    # Safety check: ensure file exists
     if not os.path.isfile(clean_path):
         raise HTTPException(status_code=404, detail="Audio file not found.")
+
+    base_outputs = os.path.abspath(os.environ.get("ZEROTTS_OUTPUT_DIR", os.path.join(_ROOT, "outputs")))
+    gen_dir = os.path.abspath(engine.GENERATED_DIR)
+    voices_dir = os.path.abspath(engine._voices_dir) if engine._voices_dir else ""
+
+    is_allowed = (
+        clean_path.startswith(base_outputs)
+        or clean_path.startswith(gen_dir)
+        or (voices_dir and clean_path.startswith(voices_dir))
+    )
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Truy cập tệp âm thanh bị từ chối.")
+
     ext = os.path.splitext(clean_path)[1].lower()
     media_map = {
         ".wav": "audio/wav",
@@ -258,21 +292,30 @@ async def get_audio_file(path: str = Query(...)):
 
 
 @app.post("/api/open-folder")
-async def api_open_folder(req: OpenFolderRequest):
+async def api_open_folder(req: OpenFolderRequest, request: Request):
     """Open a folder in Windows Explorer."""
-    msg = engine.open_folder(req.folder_name_or_path)
+    ctx = get_auth_context(request)
+    sid = _get_session_id(request)
+    user_dir = auth.resolve_output_dir(ctx, sid)
+    target = req.folder_name_or_path
+    if not target:
+        target = str(user_dir)
+    msg = engine.open_folder(target)
     return {"status": msg}
 
 
 @app.post("/api/concat")
-async def api_concat(req: ConcatRequest):
+async def api_concat(req: ConcatRequest, request: Request):
     """Concatenate segment files in a folder into a single merged audio."""
-    merged_path = engine.concat_folder_audio(req.folder_name, output_format=req.merged_format)
+    ctx = get_auth_context(request, req.token)
+    sid = req.session_id or _get_session_id(request)
+    user_dir = auth.resolve_output_dir(ctx, sid)
+    merged_path = engine.concat_folder_audio(req.folder_name, output_format=req.merged_format, base_dir=str(user_dir))
     if not merged_path:
         raise HTTPException(status_code=400, detail="Không thể nối audio (không đủ tệp hoặc lỗi ffmpeg).")
     
-    files = engine.get_folder_files(req.folder_name)
-    details = engine.parse_segment_details(req.folder_name, merged_path)
+    files = engine.get_folder_files(req.folder_name, base_dir=str(user_dir))
+    details = engine.parse_segment_details(req.folder_name, merged_path, base_dir=str(user_dir))
     return {
         "success": True,
         "merged_path": merged_path,
@@ -282,6 +325,7 @@ async def api_concat(req: ConcatRequest):
         "details": details,
         "message": f"Đã nối thành công: {os.path.basename(merged_path)}",
     }
+
 
 
 @app.post("/api/upload-file")
@@ -350,6 +394,20 @@ if sys.platform == "win32":
             pass
 
 
+@app.on_event("startup")
+async def _start_background_storage_cleaner():
+    async def _cleanup_loop():
+        cleaner = auth.StorageCleaner()
+        while True:
+            try:
+                cleaner.cleanup_expired()
+            except Exception as exc:
+                print(f"[StorageCleaner] ⚠️ Lỗi dọn dẹp bộ nhớ: {exc}")
+            await asyncio.sleep(300)  # Check every 5 minutes
+
+    asyncio.create_task(_cleanup_loop())
+
+
 # ── Server-Sent Events (SSE) Generation Endpoint ─────────────────────────────
 
 @app.post("/api/generate")
@@ -361,19 +419,21 @@ async def generate_tts(req: GenerateRequest, request: Request):
 
     client_ip = _get_client_ip(request)
     auth_ctx = get_auth_context(request, req.token)
+    session_id = req.session_id or _get_session_id(request)
+    user_output_root = auth.resolve_output_dir(auth_ctx, session_id)
 
     # 1. Enforce Tier Character Limits
     if len(text) > auth_ctx.max_chars:
         raise HTTPException(
             status_code=400,
-            detail=f"Văn bản ({len(text):,} ký tự) vượt quá giới hạn của cấp bậc {auth_ctx.tier.upper()} (tối đa {auth_ctx.max_chars:,} ký tự). Hãy rút ngắn hoặc nhập VIP/Master Key."
+            detail=f"Văn bản ({len(text):,} ký tự) vượt quá giới hạn tài nguyên của phiên ({auth_ctx.max_chars:,} ký tự) nhằm bảo vệ CPU máy chủ khỏi quá tải. Vui lòng rút ngắn nội dung."
         )
 
     # 2. Enforce Hourly Rate Limits
     if auth_ctx.remaining_quota <= 0:
         raise HTTPException(
             status_code=429,
-            detail=f"Bạn đã sử dụng hết hạn mức {auth_ctx.hourly_limit} lượt tạo trong 1 giờ. Vui lòng thử lại sau hoặc nhập VIP Key."
+            detail=f"Hệ thống tạm khóa yêu cầu ({auth_ctx.hourly_limit} lượt/giờ) nhằm chống spam và giữ ổn định tài nguyên máy chủ. Vui lòng thử lại sau."
         )
 
     use_voice = req.mode == "voice"
@@ -405,6 +465,7 @@ async def generate_tts(req: GenerateRequest, request: Request):
                 use_voice=use_voice,
                 num_workers=int(req.num_workers),
                 result=result_container,
+                output_root=str(user_output_root),
             )
 
         loop = asyncio.get_running_loop() if hasattr(asyncio, "get_running_loop") else asyncio.get_event_loop()
@@ -443,15 +504,15 @@ async def generate_tts(req: GenerateRequest, request: Request):
             # Build completion payload safely
             all_folders = result_container.get("folders", [])
             out_folder = result_container.get("folder_path", "")
-            if not out_folder or out_folder == engine.GENERATED_DIR:
+            if not out_folder or out_folder == str(user_output_root) or out_folder == engine.GENERATED_DIR:
                 default_folder = "__legacy__"
             else:
                 default_folder = os.path.basename(out_folder)
 
-            folders = engine.list_generated_folders()
-            files = engine.get_folder_files(default_folder) if default_folder else []
+            folders = engine.list_generated_folders(base_dir=str(user_output_root))
+            files = engine.get_folder_files(default_folder, base_dir=str(user_output_root)) if default_folder else []
             default_file = last_file or (files[0]["path"] if files else "")
-            details = engine.parse_segment_details(out_folder, default_file)
+            details = engine.parse_segment_details(out_folder, default_file, base_dir=str(user_output_root))
 
             final_payload = {
                 "status": "✅ Đã hoàn thành toàn bộ dự án!",
@@ -482,6 +543,7 @@ async def generate_tts(req: GenerateRequest, request: Request):
             "X-Accel-Buffering": "no",
         },
     )
+
 
 
 # Mount static assets directory
