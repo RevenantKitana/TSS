@@ -57,12 +57,34 @@ echo -e "${C_GREEN}   ✅ Hoàn tất cài đặt các gói hệ thống.${C_RES
 # ── 2. Tinh gọn OS (Debloat) & Tối ưu hóa RAM, Swap & Kernel BBR ─────────────
 echo -e "${C_YELLOW}⚡ [2/8] Tinh gọn hệ điều hành & Tối ưu hóa tài nguyên phần cứng VM...${C_RESET}"
 
-# 2.1 Debloat dịch vụ thừa ngốn RAM & CPU
-echo "   -> Tinh gọn OS (Debloat): Vô hiệu hóa snapd, multipathd, crash reporting & background update timers..."
-sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
-sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+# 2.1 Tinh gọn OS & Chống tự động cập nhật ngầm 100% (Anti Auto-Update Lock)
+echo "   -> Chống tự động cập nhật (Block Auto-Update): Khóa cứng apt-daily, unattended-upgrades & timers..."
+
+# Khóa cấu hình APT không cho quét / tải / nâng cấp gói ngầm
+sudo mkdir -p /etc/apt/apt.conf.d/
+sudo bash -c "cat > /etc/apt/apt.conf.d/20auto-upgrades << 'EOF'
+APT::Periodic::Update-Package-Lists \"0\";
+APT::Periodic::Download-Upgradeable-Packages \"0\";
+APT::Periodic::AutocleanInterval \"0\";
+APT::Periodic::Unattended-Upgrade \"0\";
+EOF"
+sudo cp /etc/apt/apt.conf.d/20auto-upgrades /etc/apt/apt.conf.d/10periodic 2>/dev/null || true
+
+# Tắt nhắc nhở nâng cấp phiên bản OS
+if [ -f /etc/update-manager/release-upgrades ]; then
+    sudo sed -i 's/^Prompt=.*/Prompt=never/' /etc/update-manager/release-upgrades 2>/dev/null || true
+fi
+
+# Mask cứng toàn bộ services và timers cập nhật ngầm
+sudo systemctl stop apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+sudo systemctl disable apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+sudo systemctl mask apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+
+# Vô hiệu hóa các dịch vụ thừa (snapd, multipathd, crash reporting)
+sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
+sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
 sudo systemctl mask snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
-echo "   ✅ Đã tinh gọn OS (tiết kiệm ~300MB - 400MB RAM và triệt tiêu giật lag CPU ngầm)."
+echo "   ✅ Đã khóa chặn 100% tự động update ngầm và tinh gọn OS (tiết kiệm ~300MB - 400MB RAM)."
 
 # 2.2 Tạo 4GB Swap nếu chưa đủ
 SWAP_TOTAL=$(free -m | awk '/Swap:/ {print $2}')

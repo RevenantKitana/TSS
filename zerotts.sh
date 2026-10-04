@@ -190,13 +190,35 @@ optimize_vm() {
     print_banner
     echo -e "${C_BOLD}${C_GREEN}⚡ TỐI ƯU HÓA HỆ ĐIỀU HÀNH & TÀI NGUYÊN VM (ORACLE FREE TIER)${C_RESET}\n"
     
-    # 0. Tinh gọn OS: Tắt tiến trình thừa ngốn RAM & CPU ngầm
-    echo -e "${C_YELLOW}🧹 0. Tinh gọn OS (Debloat): Vô hiệu hóa snapd, multipathd, crash reporters & background timers...${C_RESET}"
-    sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
-    sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie unattended-upgrades apt-daily.timer apt-daily-upgrade.timer motd-news.timer 2>/dev/null || true
+    # 0. Tinh gọn OS & Chống tự động cập nhật ngầm 100% (Anti Auto-Update Lock)
+    echo -e "${C_YELLOW}🧹 0. Tinh gọn OS & Khóa chặn Auto-Update (Block background updates)...${C_RESET}"
+    
+    # Khóa cấu hình APT
+    sudo mkdir -p /etc/apt/apt.conf.d/
+    sudo bash -c "cat > /etc/apt/apt.conf.d/20auto-upgrades << 'EOF'
+APT::Periodic::Update-Package-Lists \"0\";
+APT::Periodic::Download-Upgradeable-Packages \"0\";
+APT::Periodic::AutocleanInterval \"0\";
+APT::Periodic::Unattended-Upgrade \"0\";
+EOF"
+    sudo cp /etc/apt/apt.conf.d/20auto-upgrades /etc/apt/apt.conf.d/10periodic 2>/dev/null || true
+
+    # Tắt nhắc nhở nâng cấp OS
+    if [ -f /etc/update-manager/release-upgrades ]; then
+        sudo sed -i 's/^Prompt=.*/Prompt=never/' /etc/update-manager/release-upgrades 2>/dev/null || true
+    fi
+
+    # Mask cứng toàn bộ services và timers cập nhật ngầm
+    sudo systemctl stop apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+    sudo systemctl disable apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+    sudo systemctl mask apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
+
+    # Vô hiệu hóa snapd, multipathd, crash reporting
+    sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
+    sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
     sudo systemctl mask snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
     sudo apt-get install -y libjemalloc2 -qq 2>/dev/null || true
-    echo "   ✅ Đã tắt các dịch vụ thừa (Tiết kiệm ~300MB - 400MB RAM, triệt tiêu giật lag CPU ngầm)."
+    echo "   ✅ Đã khóa chặn 100% tự động update ngầm và tinh gọn OS (Tiết kiệm ~300MB - 400MB RAM)."
 
     # 1. Tối ưu Swap & RAM
     echo -e "\n${C_YELLOW}🧠 1. Kiểm tra & Tối ưu Swapfile / Virtual Memory...${C_RESET}"
