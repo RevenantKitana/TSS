@@ -29,7 +29,7 @@ echo "==========================================================================
 echo -e "${C_RESET}"
 
 REPO_URL="https://github.com/RevenantKitana/TSS.git"
-STABLE_COMMIT="027dcd8"
+STABLE_COMMIT="main"
 MODEL_HF_REPO="zeroweight-ai/ZeroTTS"
 MODEL_HF_URL="https://huggingface.co/zeroweight-ai/ZeroTTS"
 INSTALL_DIR="/home/ubuntu/TSS"
