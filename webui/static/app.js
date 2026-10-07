@@ -135,6 +135,28 @@
     return headers;
   }
 
+  function formatApiError(errData, fallbackStatus = '') {
+    if (!errData) return fallbackStatus ? `Lỗi máy chủ (${fallbackStatus})` : 'Đã xảy ra lỗi không xác định.';
+    const detail = errData.detail !== undefined ? errData.detail : (errData.message || errData.error);
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d) => {
+          if (typeof d === 'string') return d;
+          if (d && typeof d === 'object') {
+            const field = d.loc ? d.loc.filter((x) => x !== 'body').join('.') : '';
+            return field ? `${field}: ${d.msg || JSON.stringify(d)}` : (d.msg || JSON.stringify(d));
+          }
+          return String(d);
+        })
+        .join('\n');
+    }
+    if (typeof detail === 'object' && detail !== null) {
+      return JSON.stringify(detail);
+    }
+    return fallbackStatus ? `Lỗi máy chủ (${fallbackStatus})` : 'Đã xảy ra lỗi không xác định.';
+  }
+
   async function authFetch(url, options = {}) {
     const headers = getApiHeaders(options.headers || {});
     return fetch(url, { ...options, headers });
@@ -201,9 +223,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.detail || 'Key không hợp lệ hoặc đã bị vô hiệu hóa.');
+        throw new Error(formatApiError(data, res.status) || 'Key không hợp lệ hoặc đã bị vô hiệu hóa.');
       }
 
       currentAuth.token = token;
@@ -432,7 +454,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Không thể đọc tệp');
+        throw new Error(formatApiError(err, res.status) || 'Không thể đọc tệp');
       }
 
       const data = await res.json();
@@ -1042,9 +1064,9 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
           }),
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          alert(`Lỗi: ${data.detail || 'Không thể nối file'}`);
+          alert(`Lỗi: ${formatApiError(data, res.status) || 'Không thể nối file'}`);
           return;
         }
 
@@ -1287,7 +1309,7 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.detail || `Lỗi máy chủ (${response.status})`);
+        throw new Error(formatApiError(errJson, response.status));
       }
 
       const reader = response.body.getReader();
