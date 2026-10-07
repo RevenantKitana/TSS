@@ -389,7 +389,7 @@ def generate_ui(text, voice_name, mode, custom_name, overwrite_mode, auto_concat
         return
     if len(text or "") > engine.MAX_TEXT_CHARS:
         yield (gr.update(), gr.update(),
-               f"Văn bản quá dài ({len(text)} ký tự, tối đa {engine.MAX_TEXT_CHARS}).",
+               f"Văn bản quá dài ({len(text):,} ký tự, tối đa {engine.MAX_TEXT_CHARS:,}).",
                gr.update(), gr.update(), gr.update())
         return
 
@@ -504,7 +504,7 @@ with gr.Blocks(title="ZeroTTS", **_STYLE_ON_BLOCKS) as demo:
             with gr.Column(elem_classes="zt-card"):
                 gr.Markdown("Nhập văn bản", elem_classes="zt-card-title")
                 gr.Markdown(
-                    f"Tối đa {engine.MAX_TEXT_CHARS} ký tự. Chưa biết viết gì? "
+                    f"Tối đa {engine.MAX_TEXT_CHARS:,} ký tự. Chưa biết viết gì? "
                     "Chọn một mẫu câu ở bên dưới.",
                     elem_classes="zt-hint",
                 )

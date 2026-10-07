@@ -54,7 +54,7 @@ DEFAULT_VOICES = next((c for c in _candidate_voices if c and os.path.isdir(c)), 
 
 GENERATED_DIR = os.environ.get("ZEROTTS_OUTPUT_DIR", os.path.join(_ROOT, "outputs", "generated"))
 SAMPLE_TEXTS_PATH = os.path.join(_HERE, "test_samples.txt")
-MAX_TEXT_CHARS = 5000
+MAX_TEXT_CHARS = 100000
 
 # Frames of canonical silence appended after every text segment during streaming
 # generation, so the codec's causal decoder (and the listener) gets a clean
