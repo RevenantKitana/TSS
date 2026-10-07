@@ -212,8 +212,8 @@ async def get_voices():
         except Exception as e:
             print(f"[API] ⚠️ Error loading voice '{name}': {e}")
             continue
-    print(f"[API] 📋 Returning {len(voices)} voices from directory: {tts.voices_root}")
-    return {"voices": voices, "default": voices[0]["id"] if voices else None, "voices_root": str(tts.voices_root)}
+    default_voice = "maichi" if any(v["id"] == "maichi" for v in voices) else (voices[0]["id"] if voices else None)
+    return {"voices": voices, "default": default_voice, "voices_root": str(tts.voices_root)}
 
 
 @app.get("/api/voice-sample")

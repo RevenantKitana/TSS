@@ -1,0 +1,18 @@
+{
+  "name": "ncKF5UoqE1ouwOv5vnfq",
+  "display_name": "Yến Nhi",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trẻ, nhẹ nhàng",
+  "tags": [
+    "nữ",
+    "trẻ",
+    "nhẹ nhàng"
+  ],
+  "n_voice_queries": 10,
+  "shape": [
+    1,
+    10,
+    768
+  ]
+}

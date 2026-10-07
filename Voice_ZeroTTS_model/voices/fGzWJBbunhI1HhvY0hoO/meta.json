@@ -1,0 +1,19 @@
+{
+  "name": "fGzWJBbunhI1HhvY0hoO",
+  "display_name": "Anh Hải",
+  "language": "vi",
+  "gender": "nam",
+  "description": "nam, trung niên, ấm áp, kể chuyện",
+  "tags": [
+    "nam",
+    "trung niên",
+    "ấm áp",
+    "kể chuyện"
+  ],
+  "n_voice_queries": 10,
+  "shape": [
+    1,
+    10,
+    768
+  ]
+}

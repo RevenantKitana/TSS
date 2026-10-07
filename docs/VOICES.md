@@ -19,7 +19,7 @@ the identity is whatever the model picks and is not stable across runs.
 
 ## Built-in voices
 
-Eight presets ship with the weights repo, each tagged by gender, age and
+Presets ship with the weights repo and `Voice_ZeroTTS_model/voices`, each tagged by gender, age and
 register/tone so you can pick one by ear or by filter. `maichi` (Mai Chi) is
 the default used throughout this README and the demos.
 
@@ -33,6 +33,14 @@ the default used throughout this README and the demos.
 | `huuduc` | Hữu Đức | nam | lớn tuổi · kể chuyện · trầm · điềm đạm |
 | `quangminh` | Quang Minh | nam | trẻ · tin tức · rõ ràng · dứt khoát |
 | `tiendat` | Tiến Đạt | nam | trẻ · bình luận · sôi nổi · năng lượng cao |
+| `quynhanh` | Quỳnh Anh | nữ | trẻ · tự nhiên · cuốn hút |
+| `67yCRDCTn1vlOHOzbohB` | MC Thanh Mai | nam | trẻ · miền Bắc · truyện |
+| `DO0LS49Nwrh1zOVazCNu` | Cam | nữ | trẻ · miền Bắc |
+| `MAJfDVfQqPF5Fr4DvibN` | Thức Dậy Đi | nam | trung niên |
+| `QY9oBcDlg6j3ux0aQvaT` | Nga | nữ | trẻ · miền Bắc |
+| `UXkjUt7xVkyKy5QRclKJ` | Quỳnh Anh (UX) | nữ | trẻ |
+| `fGzWJBbunhI1HhvY0hoO` | Anh Hải | nam | trung niên · ấm áp · kể chuyện |
+| `ncKF5UoqE1ouwOv5vnfq` | Yến Nhi | nữ | trẻ · nhẹ nhàng |
 
 `v.tags` (a `list[str]`) and `v.gender`/`v.display_name` read straight off each
 pack's `meta.json` — see [Voice pack format](#voice-pack-format) below.

@@ -1,0 +1,18 @@
+{
+  "name": "QY9oBcDlg6j3ux0aQvaT",
+  "display_name": "Nga",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trẻ, miền Bắc",
+  "tags": [
+    "nữ",
+    "trẻ",
+    "miền Bắc"
+  ],
+  "n_voice_queries": 10,
+  "shape": [
+    1,
+    10,
+    768
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "quynhanh",
+  "display_name": "Quỳnh Anh",
+  "language": "vi",
+  "gender": "nữ",
+  "description": "nữ, trẻ, tự nhiên, cuốn hút",
+  "tags": [
+    "nữ",
+    "trẻ",
+    "tự nhiên",
+    "cuốn hút"
+  ],
+  "n_voice_queries": 10,
+  "shape": [
+    1,
+    10,
+    768
+  ]
+}

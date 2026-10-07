@@ -1,0 +1,17 @@
+{
+  "name": "MAJfDVfQqPF5Fr4DvibN",
+  "display_name": "Thức Dậy Đi",
+  "language": "vi",
+  "gender": "nam",
+  "description": "nam, trung niên",
+  "tags": [
+    "nam",
+    "trung niên"
+  ],
+  "n_voice_queries": 10,
+  "shape": [
+    1,
+    10,
+    768
+  ]
+}
