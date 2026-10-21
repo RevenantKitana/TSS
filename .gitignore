@@ -28,8 +28,12 @@ js/public/ggml/*.wasm
 js/public/ggml/models
 .DS_Store
 
-#
+# SSH Keys & Local VM Config
 *.key
+*.pem
+VM/vm_config.env
+VM/*.key
+VM/*.pem
 
 FreetierVM-2/
 
