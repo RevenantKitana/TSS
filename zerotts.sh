@@ -238,12 +238,12 @@ EOF"
     sudo systemctl disable apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
     sudo systemctl mask apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer unattended-upgrades.service update-notifier-download.timer motd-news.timer 2>/dev/null || true
 
-    # Vô hiệu hóa snapd, multipathd, crash reporting
-    sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
-    sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie 2>/dev/null || true
-    sudo systemctl mask snapd snapd.socket multipathd apport whoopsie 2>/dev/null || true
+    # Vô hiệu hóa snapd, multipathd, crash reporting, modem, firmware update daemon
+    sudo systemctl stop snapd snapd.socket snapd.seeded multipathd apport whoopsie ModemManager fwupd 2>/dev/null || true
+    sudo systemctl disable snapd snapd.socket snapd.seeded multipathd apport whoopsie ModemManager fwupd 2>/dev/null || true
+    sudo systemctl mask snapd snapd.socket multipathd apport whoopsie ModemManager fwupd 2>/dev/null || true
     sudo apt-get install -y libjemalloc2 -qq 2>/dev/null || true
-    echo "   ✅ Đã khóa chặn 100% tự động update ngầm và tinh gọn OS (Tiết kiệm ~300MB - 400MB RAM)."
+    echo "   ✅ Đã khóa chặn 100% tự động update ngầm và tinh gọn OS (Tiết kiệm ~350MB - 450MB RAM)."
 
     # 1. Tối ưu Swap & RAM
     echo -e "\n${C_YELLOW}🧠 1. Kiểm tra & Tối ưu Swapfile / Virtual Memory...${C_RESET}"

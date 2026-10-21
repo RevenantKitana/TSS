@@ -61,16 +61,17 @@ echo  [2] Chon / Doi SSH Key moi (.key hoac .pem)
 echo  [3] Kiem tra ket noi toi VM (Test Ping ^& SSH)
 echo  [4] Mo cua so dong lenh SSH toi VM (Interactive Shell)
 echo.
-echo  -- THAO TAC HE THONG ZEROTTS ------------------------------------------------
+echo  -- THAO TAC HE THONG VA HA TANG ----------------------------------------
 echo  [5] Cai dat ZeroTTS Studio tu A-Z (1-Click Fresh Install tu GitHub)
 echo  [6] Mo Menu Quan tri All-In-One tren VM (zerotts CLI)
 echo  [7] Xem tinh trang phan cung may chu (CPU, RAM, Swap, Disk)
-echo  [8] Cai dat / Doi Cloudflare Tunnel Token
+echo  [8] Quan ly Swap RAM (Kiem tra, Tao moi, Tang/Giam, Xoa)
+echo  [9] Cai dat / Doi Cloudflare Tunnel Token
 echo.
 echo  [0] Thoat
 echo ===============================================================================
 set "CHOICE="
-set /p "CHOICE=Nhap lua chon (0-8): "
+set /p "CHOICE=Nhap lua chon (0-9): "
 
 if "%CHOICE%"=="" goto :MAIN_MENU
 if "%CHOICE%"=="1" goto :SET_IP_USER
@@ -80,7 +81,8 @@ if "%CHOICE%"=="4" goto :OPEN_SSH
 if "%CHOICE%"=="5" goto :INSTALL_ZEROTTS
 if "%CHOICE%"=="6" goto :OPEN_ZEROTTS_MENU
 if "%CHOICE%"=="7" goto :CHECK_RESOURCES
-if "%CHOICE%"=="8" goto :SETUP_TUNNEL
+if "%CHOICE%"=="8" goto :MANAGE_SWAP
+if "%CHOICE%"=="9" goto :SETUP_TUNNEL
 if "%CHOICE%"=="0" exit /b 0
 
 echo Lua chon khong hop le. Vui long thu lai.
@@ -208,7 +210,7 @@ rem ----------------------------------------------------------------------------
 :TEST_SSH
 cls
 echo ===============================================================================
-echo               KIEM TRA KET NOI TOI VM (%VM_USER%@%VM_IP%:%VM_PORT%)
+echo               KIEM TRA KET NOI TOI VM: %VM_USER%@%VM_IP%:%VM_PORT%
 echo ===============================================================================
 echo.
 if not exist "%~dp0%VM_KEY%" (
@@ -220,16 +222,20 @@ if not exist "%~dp0%VM_KEY%" (
 
 echo Dang gui lenh kiem tra toi may chu qua SSH...
 echo.
-ssh -i "%~dp0%VM_KEY%" -p %VM_PORT% -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=6 %VM_USER%@%VM_IP% "echo 'KET NOI SSH THANH CONG!' && echo 'Hostname: ' \$(hostname) && echo 'Uptime:   ' \$(uptime -p) && echo 'CPU:      ' \$(nproc) 'cores (' \$(uname -m) ')' && echo 'RAM:      ' \$(free -h | awk '/Mem:/ {print \$2}')"
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 %VM_USER%@%VM_IP% "echo === KET NOI SSH THANH CONG ===; echo [Hostname]; hostname; echo [Uptime]; uptime -p; echo [CPU Cores]; nproc; echo [RAM]; free -h"
 
-if errorlevel 1 (
-    echo.
-    echo Khong the ket noi toi may chu!
-    echo Vui long kiem tra lai:
-    echo   1. Dia chi IP (%VM_IP%) da dung chua?
-    echo   2. May chu da mo Port %VM_PORT% tren Security List / Tuong lua chua?
-    echo   3. File SSH Key (%VM_KEY%) co dung voi may chu nay khong?
-)
+if errorlevel 1 goto :TEST_FAIL
+goto :TEST_DONE
+
+:TEST_FAIL
+echo.
+echo Khong the ket noi toi may chu!
+echo Vui long kiem tra lai:
+echo   1. Dia chi IP: %VM_IP%
+echo   2. May chu da mo Port %VM_PORT% tren Security List chua?
+echo   3. File SSH Key: %VM_KEY%
+
+:TEST_DONE
 echo.
 pause
 goto :MAIN_MENU
@@ -285,13 +291,138 @@ rem ----------------------------------------------------------------------------
 :CHECK_RESOURCES
 cls
 echo Dang doc tai nguyen may chu %VM_IP%...
-ssh -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no -o ConnectTimeout=8 %VM_USER%@%VM_IP% "echo '=== 1. CPU & LOAD AVERAGE ==='; uptime; echo ''; echo '=== 2. MEMORY (RAM & SWAP) ==='; free -h; echo ''; echo '=== 3. DISK USAGE ==='; df -h /; echo ''; echo '=== 4. DICH VU ZEROTTS ==='; systemctl status zerotts --no-pager 2>/dev/null | head -n 8 || echo 'Chua cai zerotts.service'; echo ''; echo '=== 5. CLOUDFLARE TUNNEL ==='; systemctl status cloudflared --no-pager 2>/dev/null | head -n 8 || echo 'Chua cai cloudflared'"
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no -o ConnectTimeout=8 %VM_USER%@%VM_IP% "echo '=== 1. CPU & LOAD AVERAGE ==='; uptime; echo ''; echo '=== 2. MEMORY (RAM & SWAP) ==='; free -h; echo ''; echo '=== 3. DISK USAGE ==='; df -h /; echo ''; echo '=== 4. DICH VU ZEROTTS ==='; systemctl status zerotts --no-pager 2>/dev/null | head -n 8 || echo 'Chua cai zerotts.service'; echo ''; echo '=== 5. CLOUDFLARE TUNNEL ==='; systemctl status cloudflared --no-pager 2>/dev/null | head -n 8 || echo 'Chua cai cloudflared'"
 echo.
 pause
 goto :MAIN_MENU
 
 rem -------------------------------------------------------------------------------
-rem 8. CAU HINH CLOUDFLARE TUNNEL
+rem 8. QUAN LY SWAP RAM (RAM AO)
+rem -------------------------------------------------------------------------------
+:MANAGE_SWAP
+cls
+echo ===============================================================================
+echo                TRINH QUAN LY SWAP RAM (RAM AO) TREN MAY CHU
+echo ===============================================================================
+echo  May chu: %VM_USER%@%VM_IP%:%VM_PORT%
+echo.
+if not exist "%~dp0%VM_KEY%" (
+    echo Loi: File SSH Key khong ton tai: %~dp0%VM_KEY%
+    echo Vui long chon muc [2] o Menu chinh de thiet lap file Key hop le.
+    pause
+    goto :MAIN_MENU
+)
+
+echo Dang doc thong tin bo nho RAM va Swap tu may chu...
+echo.
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 %VM_USER%@%VM_IP% "echo '=== 1. DUNG LUONG BO NHO (RAM & SWAP) ==='; free -h; echo ''; echo '=== 2. THIET BI SWAP DANG HOAT DONG ==='; swapon --show; echo ''; echo '=== 3. DO UU TIEN (vm.swappiness) ==='; sysctl vm.swappiness; echo ''; echo '=== 4. DUNG LUONG O CUNG CON TRONG ==='; df -h /"
+
+if errorlevel 1 (
+    echo.
+    echo Khong the ket noi toi may chu de doc thong tin Swap!
+    pause
+    goto :MAIN_MENU
+)
+
+echo ===============================================================================
+echo  LUA CHON THAO TAC SWAP RAM:
+echo  [1] Tao moi / Thay doi Swap thanh 2 GB (Goi nhe - Phu hop 18GB RAM)
+echo  [2] Tao moi / Thay doi Swap thanh 4 GB (Tieu chuan an toan khuyen nghi)
+echo  [3] Tao moi / Thay doi Swap thanh 8 GB (Goi mo rong)
+echo  [4] Nhap dung luong Swap tuy chinh (GB)
+echo  [5] Chinh thong so vm.swappiness (Khuyen nghi: 10 de uu tien RAM thuc)
+echo  [6] Tat va XOA HOAN TOAN Swap RAM (Ve 0B Swapless, giai phong o cung)
+echo  [r] Tai lai thong tin Swap (Refresh)
+echo.
+echo  [0] Quay lai Menu chinh
+echo ===============================================================================
+set "SWAP_CHOICE="
+set /p "SWAP_CHOICE=Nhap lua chon (0-6 hoac r): "
+
+if "%SWAP_CHOICE%"=="" goto :MANAGE_SWAP
+if /i "%SWAP_CHOICE%"=="r" goto :MANAGE_SWAP
+if "%SWAP_CHOICE%"=="0" goto :MAIN_MENU
+if "%SWAP_CHOICE%"=="1" set "TARGET_SWAP=2" & goto :DO_SET_SWAP
+if "%SWAP_CHOICE%"=="2" set "TARGET_SWAP=4" & goto :DO_SET_SWAP
+if "%SWAP_CHOICE%"=="3" set "TARGET_SWAP=8" & goto :DO_SET_SWAP
+if "%SWAP_CHOICE%"=="4" goto :CUSTOM_SWAP
+if "%SWAP_CHOICE%"=="5" goto :SET_SWAPPINESS
+if "%SWAP_CHOICE%"=="6" goto :DELETE_SWAP
+
+echo Lua chon khong hop le.
+timeout /t 2 > nul
+goto :MANAGE_SWAP
+
+:CUSTOM_SWAP
+echo.
+set "CUSTOM_SIZE="
+set /p "CUSTOM_SIZE=Nhap dung luong Swap muon tao theo GB (VD 3 hoac 6): "
+if "%CUSTOM_SIZE%"=="" goto :MANAGE_SWAP
+set "CUSTOM_SIZE=%CUSTOM_SIZE: =%"
+set "TARGET_SWAP=%CUSTOM_SIZE%"
+goto :DO_SET_SWAP
+
+:DO_SET_SWAP
+cls
+echo ===============================================================================
+echo       DANG THIET LAP SWAP RAM %TARGET_SWAP% GB TREN MAY CHU...
+echo ===============================================================================
+echo.
+echo 1. Tat Swap cu neu dang chay...
+echo 2. Khoi tao /swapfile voi dung luong %TARGET_SWAP% GB...
+echo 3. Phan quyen an toan (chmod 600) va khoi tao mkswap...
+echo 4. Bat Swap va luu vao /etc/fstab...
+echo 5. Cau hinh vm.swappiness=10 (Uu tien dung RAM thuc)...
+echo.
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no %VM_USER%@%VM_IP% "sudo swapoff -a 2>/dev/null; sudo rm -f /swapfile; (sudo fallocate -l %TARGET_SWAP%G /swapfile 2>/dev/null || sudo truncate -s %TARGET_SWAP%G /swapfile) && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && sudo sed -i '/\/swapfile/d' /etc/fstab && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null && sudo sysctl vm.swappiness=10 && sudo sed -i '/vm.swappiness/d' /etc/sysctl.conf && echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf >/dev/null && echo '' && echo '=== THIET LAP SWAP %TARGET_SWAP% GB THANH CONG! ===' && free -h && swapon --show"
+echo.
+pause
+goto :MANAGE_SWAP
+
+:SET_SWAPPINESS
+cls
+echo ===============================================================================
+echo              CAU HINH DO UU TIEN SU DUNG SWAP (vm.swappiness)
+echo ===============================================================================
+echo.
+echo Giai thich thong so:
+echo   - 60: Mac dinh cua Ubuntu (de day du lieu xuong Swap som)
+echo   - 10: Khuyen nghi khi co 18GB RAM (chi dung Swap khi RAM that day tren 90%%)
+echo   -  0: Chi dung Swap khi RAM that hoan toan can kiet
+echo.
+set "VAL_SWAPPINESS="
+set /p "VAL_SWAPPINESS=Nhap gia tri swappiness mong muon (0-100, khuyen nghi 10): "
+if "%VAL_SWAPPINESS%"=="" goto :MANAGE_SWAP
+set "VAL_SWAPPINESS=%VAL_SWAPPINESS: =%"
+
+echo.
+echo Dang cap nhat vm.swappiness=%VAL_SWAPPINESS% tren may chu...
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no %VM_USER%@%VM_IP% "sudo sysctl vm.swappiness=%VAL_SWAPPINESS% && sudo sed -i '/vm.swappiness/d' /etc/sysctl.conf && echo 'vm.swappiness=%VAL_SWAPPINESS%' | sudo tee -a /etc/sysctl.conf >/dev/null && echo '=== CAP NHAT THANH CONG! ==='"
+echo.
+pause
+goto :MANAGE_SWAP
+
+:DELETE_SWAP
+cls
+echo ===============================================================================
+echo               TAT VA XOA HOAN TOAN SWAP RAM TREN MAY CHU
+echo ===============================================================================
+echo.
+echo CANH BAO: Thao tac nay se tat Swap, xoa file /swapfile va tra ve trang thai
+echo Swapless (0B). Dung luong o cung se duoc giai phong ngay lap tuc.
+echo.
+set /p "CONFIRM_DEL=Ban co CHAC CHAN muon tat va xoa hoan toan Swap? (Y/N): "
+if /i not "%CONFIRM_DEL%"=="Y" goto :MANAGE_SWAP
+
+echo.
+echo Dang tat Swap va xoa /swapfile...
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no %VM_USER%@%VM_IP% "sudo swapoff -a 2>/dev/null; sudo rm -f /swapfile; sudo sed -i '/\/swapfile/d' /etc/fstab; echo '=== DA TAT VA XOA HOAN TOAN SWAP! ==='; free -h"
+echo.
+pause
+goto :MANAGE_SWAP
+
+rem -------------------------------------------------------------------------------
+rem 9. CAU HINH CLOUDFLARE TUNNEL
 rem -------------------------------------------------------------------------------
 :SETUP_TUNNEL
 cls
@@ -309,7 +440,7 @@ set "CF_TOKEN=%CF_TOKEN: =%"
 
 echo.
 echo Dang cau hinh Cloudflare Tunnel tren may chu...
-ssh -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no %VM_USER%@%VM_IP% "sudo cloudflared service uninstall 2>/dev/null || true; sudo cloudflared service install %CF_TOKEN% && sudo systemctl restart cloudflared && echo 'Cai dat Cloudflare Tunnel thanh cong!' || echo 'That bai'"
+ssh -n -i "%~dp0%VM_KEY%" -p %VM_PORT% -o StrictHostKeyChecking=no %VM_USER%@%VM_IP% "sudo cloudflared service uninstall 2>/dev/null || true; sudo cloudflared service install %CF_TOKEN% && sudo systemctl restart cloudflared && echo 'Cai dat Cloudflare Tunnel thanh cong!' || echo 'That bai'"
 echo.
 pause
 goto :MAIN_MENU
