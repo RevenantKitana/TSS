@@ -23,23 +23,13 @@ Trước khi bấm chạy notebook, bạn nhìn sang cột **Notebook settings**
 
 ---
 
-## 🚀 Khởi Chạy 1-Click Trên Kaggle
+## 🚀 Khởi Chạy 2 Bước Trên Kaggle (Tối Ưu Cho Non-Tech)
 
 1. **Tải Notebook lên Kaggle**:
    - Truy cập [Kaggle Notebooks](https://www.kaggle.com/code) -> Bấm nút **New Notebook**.
-   - Trên thanh menu trên cùng của Notebook, chọn **File** -> **Upload Notebook** -> Chọn file [`ZeroTTS_Kaggle_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Kaggle_FreeTier.ipynb).
+   - Trên menu trên cùng, chọn **File** -> **Upload Notebook** -> Chọn file [`ZeroTTS_Kaggle_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Kaggle_FreeTier.ipynb).
 2. **Bật GPU & Internet**:
    - Ở cột bên phải (**Settings**): Chọn **Accelerator: GPU T4 x2** và bật **Internet: ON**.
-3. **Chạy toàn bộ (Run All)**:
-   - Chọn menu **Run** -> **Run All (Chạy tất cả)**:
-   - Hệ thống sẽ tự động clone mã nguồn từ `https://github.com/RevenantKitana/TSS` (kèm thư mục giọng `Voice_ZeroTTS_model`), cài đặt ONNX Runtime GPU (CUDA), tải mô hình và kích hoạt Cloudflare Tunnel.
-4. **Mở WebUI Studio**:
-   - Khi chạy tới **Bước 5**, bấm vào nút hoặc đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
-
----
-
-## 💾 Tải Toàn Bộ File Audio Đã Tạo Về Máy Tính
-
-Trong notebook Kaggle đã có sẵn cell **Bước 7**:
-- Cell này tự động gom toàn bộ file `.mp3`, `.wav`, timeline `.json` trong thư mục `outputs/` thành file **`ZeroTTS_Outputs.zip`**.
-- Bấm vào link tải trực tiếp trong notebook hoặc vào thẻ **Data / Output** ở thanh bên phải của Kaggle để tải về máy tính.
+3. **Quy trình chỉ đúng 2 bước:**
+   - **Bước 1 (Cài Đặt Trọn Gói A-Z):** Bấm nút Play (▶️) để tự động tải mã nguồn, cài đặt thư viện và nạp mô hình AI (~2 phút).
+   - **Bước 2 (Khởi Chạy WebUI):** Bấm nút Play (▶️) -> Nhấp vào nút màu tím hiển thị trên màn hình để mở WebUI Studio!

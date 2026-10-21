@@ -21,21 +21,21 @@ Dự án cung cấp **2 phiên bản Notebook** tùy theo nhu cầu sử dụng 
 
 ---
 
-### Hướng Dẫn Chạy Bản 2: Headless / Trực Tiếp (Không Cần Frontend)
-1. Mở file [`ZeroTTS_Colab_Headless.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_Headless.ipynb) trên Google Colab.
+### Hướng Dẫn Chạy Bản 1: WebUI Studio (Kèm Giao Diện Web Trực Quan)
+1. Mở file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) trên Google Colab.
 2. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
-3. Chạy lần lượt các bước:
-   - **Bước 1 -> Bước 4**: Kết nối Google Drive, cài đặt ONNX Runtime GPU và nạp mô hình.
-   - **Bước 5**: Nhập chữ và bấm nghe thử trực tiếp âm thanh sinh ra ngay trong notebook (`IPython.display.Audio`).
-   - **Bước 6 & Bước 7**: Tải kịch bản (.docx / .txt) lên Google Drive, chạy render dự án theo tag `$[Thư_mục]`, `[Câu 1]`, `#[Bỏ qua]`, `[pause: 1.5s]` và tự động nối file `_FULL_MERGED.mp3`.
+3. **Quy trình chỉ đúng 2 bước:**
+   - **Bước 1 (Cài Đặt Trọn Gói A-Z):** Bấm nút Play (▶️) và chờ hệ thống tự động cài đặt môi trường, tải mô hình AI (~2 phút).
+   - **Bước 2 (Khởi Chạy WebUI):** Bấm nút Play (▶️) -> Nhấp vào nút màu tím lớn hiển thị trên màn hình để mở giao diện Web Studio!
 
 ---
 
-### Hướng Dẫn Chạy Bản 1: WebUI Studio (Kèm Giao Diện Web)
-1. Mở file [`ZeroTTS_Colab_FreeTier.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_FreeTier.ipynb) trên Google Colab.
+### Hướng Dẫn Chạy Bản 2: Headless / Batch Render (Đọc Kịch Bản Tự Động)
+1. Mở file [`ZeroTTS_Colab_Headless.ipynb`](file:///e:/Tools/TSS-main/ZeroTTS_Colab_Headless.ipynb) trên Google Colab.
 2. Bật GPU T4: Vào **Runtime** -> **Change runtime type** -> Chọn **T4 GPU** -> Nhấn **Save**.
-3. Chọn **Runtime** -> **Run all (Chạy tất cả)**:
-   - Khi chạy đến **Bước 5**, bấm vào đường link **Public URL** (`https://xxxx.trycloudflare.com`) để mở WebUI Studio!
+3. **Quy trình chỉ đúng 2 bước:**
+   - **Bước 1 (Cài Đặt Trọn Gói A-Z):** Bấm nút Play (▶️) để kết nối Google Drive và nạp mô hình AI vào GPU.
+   - **Bước 2 (Thực Thi Render):** Dán văn bản kịch bản (hoặc điền đường dẫn file `.docx` trên Google Drive), chọn giọng đọc -> Bấm nút Play (▶️) để tạo file âm thanh xuất thẳng vào Google Drive của bạn!
 
 ---
 
