@@ -10,10 +10,10 @@ echo.
 
 rem 1. Tim Python thuc thi
 set "PY_CMD=python"
-if exist "python-3.11.2-embed-amd64\python.exe" (
-    set "PY_CMD=python-3.11.2-embed-amd64\python.exe"
-) else if exist ".venv\Scripts\python.exe" (
+if exist ".venv\Scripts\python.exe" (
     set "PY_CMD=.venv\Scripts\python.exe"
+) else if exist "python-3.11.2-embed-amd64\python.exe" (
+    set "PY_CMD=python-3.11.2-embed-amd64\python.exe"
 )
 
 rem 2. Neu nguoi dung keo tha file vao hoac truyen tham so

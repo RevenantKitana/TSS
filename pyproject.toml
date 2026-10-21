@@ -31,7 +31,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # webui server is powered by pure HTML/CSS/JS frontend on top of FastAPI and Uvicorn
-webui = ["fastapi>=0.110", "uvicorn>=0.27", "requests>=2.31"]
+webui = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "requests>=2.31",
+    "onnxruntime>=1.16",
+    "aiofiles>=23.0",
+    "psutil>=5.9",
+    "python-docx>=1.0",
+]
 # Metrics only — the scorers are torch models. Inference stays torch-free.
 # Benchmarking. The metrics themselves live in the ZeroBench-TTS dataset repo
 # (fetched at runtime by evaluation/zerobench.py); these are the libraries its

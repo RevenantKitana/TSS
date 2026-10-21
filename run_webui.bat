@@ -8,76 +8,56 @@ echo           Khoi chay ZeroTTS Web UI
 echo ===================================================
 echo.
 
-rem 1. Kiem tra neu co thu muc Python Embed local trong python-3.11.2-embed-amd64
-if exist "python-3.11.2-embed-amd64\python.exe" (
-    set "PY_CMD=python-3.11.2-embed-amd64\python.exe"
-    echo * Phat hien thuc thi Python Embed local trong python-3.11.2-embed-amd64!
-    
-    if exist "python-3.11.2-embed-amd64\python311._pth" (
-        "python-3.11.2-embed-amd64\python.exe" -c "with open('python-3.11.2-embed-amd64/python311._pth', 'r+') as f: txt = f.read(); txt = txt.replace('#import site', 'import site'); txt = txt + '\nLib/site-packages\n' if 'Lib/site-packages' not in txt else txt; f.seek(0); f.write(txt); f.truncate()" >nul 2>&1
-    )
-    
-    "python-3.11.2-embed-amd64\python.exe" -c "import zerotts, fastapi, uvicorn" >nul 2>&1
-    if errorlevel 1 (
-        echo * Dang cai dat dependencies cho Python Embed local...
-        where uv >nul 2>&1
-        if not errorlevel 1 (
-            uv pip install --python "python-3.11.2-embed-amd64\python.exe" -e ".[webui]"
-        ) else if exist "uv.exe" (
-            .\uv.exe pip install --python "python-3.11.2-embed-amd64\python.exe" -e ".[webui]"
-        ) else (
-            "python-3.11.2-embed-amd64\python.exe" -m pip install -e ".[webui]"
-        )
-    )
-    goto :RUN_APP
-)
-
-rem 2. Neu khong dung Python Embed local, dung moi truong ao .venv
-set "VENV_OK=0"
+rem 1. Kiem tra neu .venv san co va hoat dong tot
+set "PY_CMD="
 if exist ".venv\Scripts\python.exe" (
-    ".venv\Scripts\python.exe" -c "import zerotts, fastapi, uvicorn" >nul 2>&1
-    if not errorlevel 1 set "VENV_OK=1"
+    ".venv\Scripts\python.exe" -c "import zerotts, fastapi, uvicorn, onnxruntime" >nul 2>&1
+    if not errorlevel 1 (
+        set "PY_CMD=.venv\Scripts\python.exe"
+        goto :RUN_APP
+    )
 )
 
-if "%VENV_OK%"=="0" (
-    if exist ".venv" (
-        echo * Phat hien moi truong .venv bi loi hoac thieu thu vien. Dang tao lai...
-        rmdir /s /q ".venv" >nul 2>&1
-    ) else (
-        echo * Chua tim thay moi truong ao .venv. Dang tien hanh cai dat tu dong...
-    )
+rem 2. Neu chua co .venv hoac thieu thu vien, su dung uv de khoi tao tu dong
+echo * Dang kiem tra cong cu uv va moi truong Python...
 
-    where uv >nul 2>&1
-    if not errorlevel 1 (
-        echo * Phat hien cong cu uv! Dang tao .venv va cai dat dependencies...
-        uv venv --python 3.11
-        uv pip install -e ".[webui]"
-    ) else if exist "uv.exe" (
-        echo * Phat hien uv.exe local! Dang tao .venv va cai dat dependencies...
-        .\uv.exe venv --python 3.11
-        .\uv.exe pip install -e ".[webui]"
+set "UV_CMD=uv"
+where uv >nul 2>&1
+if errorlevel 1 (
+    if exist "%~dp0uv.exe" (
+        set "UV_CMD=%~dp0uv.exe"
     ) else (
-        where python >nul 2>&1
-        if not errorlevel 1 (
-            echo * Dang tao .venv bang Python he thong...
-            python -m venv .venv
-            call .venv\Scripts\activate.bat
-            pip install -e ".[webui]"
-        ) else (
-            echo [LOI] May tinh cua ban chua cai dat Python hoac uv!
-            echo Vui long cai dat Python phien ban >= 3.9 de su dung ZeroTTS.
-            echo.
+        echo * Chua co uv trong PATH. Dang tu dong tai uv standalone tu Astral GitHub (~12MB)...
+        curl.exe -fL -o "%~dp0uv.zip" "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip"
+        if errorlevel 1 (
+            echo [LOI] Khong the tai uv.exe qua curl! Vui long kiem tra ket noi mang.
             pause
             exit /b 1
         )
+        tar.exe -xf "%~dp0uv.zip" -C "%~dp0" uv.exe
+        del "%~dp0uv.zip" 2>nul
+        set "UV_CMD=%~dp0uv.exe"
     )
 )
 
-if exist ".venv\Scripts\python.exe" (
-    set "PY_CMD=.venv\Scripts\python.exe"
-) else (
-    set "PY_CMD=python"
+if not exist ".venv\Scripts\python.exe" (
+    echo * Dang tu dong tai Python 3.11 Portable va khoi tao moi truong .venv qua uv...
+    "%UV_CMD%" venv "%~dp0.venv" --python 3.11
+    if errorlevel 1 (
+        echo [LOI] Khong the tao .venv qua uv!
+        pause
+        exit /b 1
+    )
 )
+
+echo * Dang dong bo dependencies cho ZeroTTS Web UI qua uv...
+"%UV_CMD%" pip install --python "%~dp0.venv\Scripts\python.exe" -e ".[webui]"
+if errorlevel 1 (
+    echo [CANH BAO] Co loi khi cai dat -e .[webui]. Dang thu cai dat truc tiep...
+    "%UV_CMD%" pip install --python "%~dp0.venv\Scripts\python.exe" onnxruntime fastapi uvicorn requests soundfile scipy numpy python-docx aiofiles psutil huggingface_hub
+)
+
+set "PY_CMD=.venv\Scripts\python.exe"
 
 :RUN_APP
 rem 3. Kiem tra va tai mo hinh neu chua co hoac khong hop le
