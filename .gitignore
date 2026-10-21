@@ -5,6 +5,7 @@ build/
 dist/
 TSS_Code.zip
 *.zip
+uv.lock
 
 .venv/
 venv/
@@ -36,6 +37,10 @@ js/public/ggml/models
 VM/vm_config.env
 VM/*.key
 VM/*.pem
+
+# Authentication & Runtime Data (Protect private tokens from public git)
+data/auth_keys.json
+!data/auth_keys.json.example
 
 FreetierVM-2/
 

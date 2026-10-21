@@ -4,12 +4,9 @@ Hệ thống đã được thiết lập để bạn có thể mang **chính xá
 
 ---
 
-## 📦 Bước 1: Đóng Gói Mã Nguồn Tùy Chỉnh (Chỉ 1 Click)
+## 📦 Bước 1: Khởi Chạy Trực Tiếp (Không Cần Đóng Gói)
 
-1. Tại thư mục dự án trên máy tính, bạn chỉ cần nhấp đúp vào file:
-   👉 [`tao_file_zip_colab.bat`](file:///c:/Users/ADMIN/Downloads/TSS-VIE/tao_file_zip_colab.bat) (hoặc chạy lệnh `python package_colab_zip.py`).
-2. Script sẽ tự động gom toàn bộ mã nguồn `src/`, `webui/`, `HD.md`, cùng toàn bộ các gói giọng (`Voice_ZeroTTS_model/voices/`) trên máy thành 1 file duy nhất:
-   👉 **`TSS_Code.zip`** (Dung lượng siêu nhẹ ~4.9 MB).
+Các file Notebook Colab được tích hợp sẵn lệnh tự động clone mã nguồn trực tiếp từ GitHub (`https://github.com/RevenantKitana/TSS.git`), do đó bạn **không cần phải nén mã nguồn thủ công hay upload file zip nữa**.
 
 ---
 
@@ -61,8 +58,8 @@ apt-get update -qq && apt-get install -y ffmpeg libportaudio2
 pip install onnxruntime-gpu soundfile sounddevice fastapi uvicorn tokenizers huggingface_hub scipy requests
 pip install -e .
 
-# 2. Khởi chạy WebUI kèm Cloudflare Tunnel tự động
-python colab_runner.py
+# 2. Khởi chạy WebUI Studio
+python webui/server.py --host 0.0.0.0 --port 7860
 ```
 
 Khi chạy xong, terminal sẽ in ra đường link Public HTTPS để bạn truy cập.

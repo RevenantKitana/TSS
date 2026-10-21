@@ -122,6 +122,10 @@ class AuthManager:
                 # Clean up deprecated fields
                 v.pop("expires_at", None)
                 self.keys[k] = KeyRecord(**v)
+
+            if not self.keys:
+                print(f"[Auth] ℹ️ File {self.auth_file} chua co key nao, dang khoi tao Admin Key mac dinh...")
+                self._init_default_keys()
         except Exception as e:
             print(f"[Auth] ⚠️ Error loading {self.auth_file}: {e}, reinitializing...")
             self._init_default_keys()
