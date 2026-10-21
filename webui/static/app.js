@@ -592,6 +592,212 @@ $[Kỹ_năng_giao_tiếp] // Thư mục 2: Kỹ năng ứng xử
     });
   }
 
+  // ── Adaptive TTS Text Chunker Modal & Handlers ────────────────────────────
+  const adaptiveChunkBtn = document.getElementById('adaptiveChunkBtn');
+  const adaptiveChunkerModal = document.getElementById('adaptiveChunkerModal');
+  const closeChunkerModalBtn = document.getElementById('closeChunkerModalBtn');
+  const chunkerPresetSelect = document.getElementById('chunkerPresetSelect');
+  const chunkerAutoChaptersCheck = document.getElementById('chunkerAutoChaptersCheck');
+  const previewChunkerBtn = document.getElementById('previewChunkerBtn');
+  const applyChunkerBtn = document.getElementById('applyChunkerBtn');
+  const chunkerStatsBar = document.getElementById('chunkerStatsBar');
+  const chunkerTotalChunks = document.getElementById('chunkerTotalChunks');
+  const chunkerAvgChars = document.getElementById('chunkerAvgChars');
+  const chunkerCalcTime = document.getElementById('chunkerCalcTime');
+  const chunkerBadges = document.getElementById('chunkerBadges');
+  const chunkerPreviewList = document.getElementById('chunkerPreviewList');
+  const chunkerStatusHint = document.getElementById('chunkerStatusHint');
+
+  let lastChunkerFormattedScript = '';
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function openAdaptiveChunkerModal() {
+    if (!adaptiveChunkerModal) return;
+    adaptiveChunkerModal.style.display = 'flex';
+    lastChunkerFormattedScript = '';
+    const text = (mainTextInput.value || '').trim();
+    if (text) {
+      triggerChunkerPreview();
+    } else {
+      if (chunkerStatsBar) chunkerStatsBar.style.display = 'none';
+      if (chunkerPreviewList) {
+        chunkerPreviewList.innerHTML = '<div class="empty-preview-hint">Chưa có văn bản trong ô soạn thảo. Vui lòng nhập văn bản trước.</div>';
+      }
+      if (chunkerStatusHint) chunkerStatusHint.textContent = 'Trống';
+    }
+  }
+
+  function closeAdaptiveChunkerModal() {
+    if (adaptiveChunkerModal) {
+      adaptiveChunkerModal.style.display = 'none';
+    }
+  }
+
+  if (adaptiveChunkBtn) {
+    adaptiveChunkBtn.addEventListener('click', openAdaptiveChunkerModal);
+  }
+
+  if (closeChunkerModalBtn) {
+    closeChunkerModalBtn.addEventListener('click', closeAdaptiveChunkerModal);
+  }
+
+  if (adaptiveChunkerModal) {
+    adaptiveChunkerModal.addEventListener('click', (e) => {
+      if (e.target === adaptiveChunkerModal) {
+        closeAdaptiveChunkerModal();
+      }
+    });
+  }
+
+  async function triggerChunkerPreview() {
+    const text = (mainTextInput.value || '').trim();
+    if (!text) {
+      alert('Vui lòng nhập văn bản vào ô soạn thảo trước khi phân đoạn.');
+      return;
+    }
+
+    try {
+      if (previewChunkerBtn) {
+        previewChunkerBtn.disabled = true;
+        previewChunkerBtn.innerHTML = '<span>⏳</span> Đang phân tích...';
+      }
+      if (chunkerStatusHint) chunkerStatusHint.textContent = 'Đang tính toán...';
+
+      const payload = {
+        text: text,
+        preset: chunkerPresetSelect ? chunkerPresetSelect.value : 'medium',
+        auto_detect_chapters: chunkerAutoChaptersCheck ? chunkerAutoChaptersCheck.checked : true,
+        project_name: customNameInput && customNameInput.value.trim() ? customNameInput.value.trim() : 'Du_an_01',
+      };
+
+      const res = await fetch('/api/chunker/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Lỗi khi phân đoạn văn bản');
+      }
+
+      const data = await res.json();
+      lastChunkerFormattedScript = data.formatted_script || '';
+
+      if (chunkerStatsBar) chunkerStatsBar.style.display = 'flex';
+      if (chunkerTotalChunks) chunkerTotalChunks.textContent = data.total_chunks || 0;
+      if (chunkerAvgChars) chunkerAvgChars.textContent = `${data.avg_chars || 0} ký tự`;
+      if (chunkerCalcTime) chunkerCalcTime.textContent = `${data.elapsed_ms || 0} ms`;
+
+      if (chunkerBadges && data.stats) {
+        let badgeHtml = '';
+        if (data.stats.SENTENCE) {
+          badgeHtml += `<span class="chunk-badge badge-sentence" title="Ngắt câu tự nhiên">🟢 Câu: ${data.stats.SENTENCE}</span>`;
+        }
+        if (data.stats.CLAUSE) {
+          badgeHtml += `<span class="chunk-badge badge-clause" title="Ngắt dấu phẩy/mệnh đề">🟡 Phẩy: ${data.stats.CLAUSE}</span>`;
+        }
+        if (data.stats.WORD) {
+          badgeHtml += `<span class="chunk-badge badge-word" title="Ngắt từ">🟠 Từ: ${data.stats.WORD}</span>`;
+        }
+        if (data.stats.HARD_CUT) {
+          badgeHtml += `<span class="chunk-badge badge-hardcut" title="Cắt cứng theo giới hạn">🔴 Cắt cứng: ${data.stats.HARD_CUT}</span>`;
+        }
+        chunkerBadges.innerHTML = badgeHtml;
+      }
+
+      if (chunkerStatusHint) {
+        chunkerStatusHint.textContent = `Hoàn thành trong ${data.elapsed_ms}ms`;
+      }
+
+      if (chunkerPreviewList) {
+        if (!data.chunks || data.chunks.length === 0) {
+          chunkerPreviewList.innerHTML = '<div class="empty-preview-hint">Không có chunk nào.</div>';
+        } else {
+          let listHtml = '';
+          data.chunks.forEach((c) => {
+            let badgeClass = 'badge-sentence';
+            let badgeLabel = 'CÂU';
+            if (c.boundary_type === 'CLAUSE') {
+              badgeClass = 'badge-clause';
+              badgeLabel = 'PHẨY';
+            } else if (c.boundary_type === 'WORD') {
+              badgeClass = 'badge-word';
+              badgeLabel = 'TỪ';
+            } else if (c.boundary_type === 'HARD_CUT') {
+              badgeClass = 'badge-hardcut';
+              badgeLabel = 'CẮT CỨNG';
+            } else if (c.boundary_type === 'END_OF_TEXT') {
+              badgeClass = 'badge-eot';
+              badgeLabel = 'CUỐI';
+            }
+
+            listHtml += `
+              <div class="chunk-card-item">
+                <div class="chunk-card-header">
+                  <span class="chunk-card-title">Chunk #${c.index}</span>
+                  <div class="chunk-card-meta">
+                    <span>${c.char_count} ký tự</span>
+                    <span class="chunk-badge ${badgeClass}">${badgeLabel}</span>
+                  </div>
+                </div>
+                <div class="chunk-card-body">${escapeHtml(c.text)}</div>
+              </div>
+            `;
+          });
+          chunkerPreviewList.innerHTML = listHtml;
+        }
+      }
+    } catch (err) {
+      alert(`Lỗi phân đoạn: ${err.message}`);
+      if (chunkerStatusHint) chunkerStatusHint.textContent = 'Thất bại';
+    } finally {
+      if (previewChunkerBtn) {
+        previewChunkerBtn.disabled = false;
+        previewChunkerBtn.innerHTML = '<span>👁️</span> Xem trước phân đoạn';
+      }
+    }
+  }
+
+  if (previewChunkerBtn) {
+    previewChunkerBtn.addEventListener('click', triggerChunkerPreview);
+  }
+
+  if (chunkerPresetSelect) {
+    chunkerPresetSelect.addEventListener('change', () => {
+      const text = (mainTextInput.value || '').trim();
+      if (text && adaptiveChunkerModal && adaptiveChunkerModal.style.display !== 'none') {
+        triggerChunkerPreview();
+      }
+    });
+  }
+
+  if (applyChunkerBtn) {
+    applyChunkerBtn.addEventListener('click', async () => {
+      if (!lastChunkerFormattedScript) {
+        await triggerChunkerPreview();
+      }
+      if (lastChunkerFormattedScript) {
+        mainTextInput.value = lastChunkerFormattedScript;
+        updateCharCount();
+        mainTextInput.focus();
+        closeAdaptiveChunkerModal();
+        if (progressMessage) {
+          progressMessage.textContent = '✂️ Đã áp dụng phân đoạn thông minh vào kịch bản thành công!';
+        }
+      }
+    });
+  }
+
   // ── Voice List & Preview ──────────────────────────────────────────────────
   async function loadVoices() {
     try {

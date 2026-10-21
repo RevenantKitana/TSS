@@ -40,6 +40,16 @@ from zerotts.chunking import (
     load_text_samples,
     normalize_punctuation,
 )
+from zerotts.adaptive_chunker import (
+    AdaptiveChunker,
+    BatchPreset,
+    BoundaryType,
+    PRESET_LARGE,
+    PRESET_MEDIUM,
+    PRESET_SMALL,
+    PRESET_XLARGE,
+    PRESETS,
+)
 from zerotts.text_norm import normalize_vi_text
 
 DEFAULT_MODEL = os.environ.get("ZEROTTS_MODEL", "zeroweight-ai/ZeroTTS")
@@ -1047,6 +1057,50 @@ def synthesize_block_to_file(
         dur_sec = full.shape[0] / float(tts.sample_rate or 1)
         return dur_sec, None
     except Exception as exc:
+        # Bước 7: Render và retry: nếu thất bại, chia nhỏ riêng chunk đó và thử lại
+        if len(block_text.strip()) > 60:
+            try:
+                chunker = AdaptiveChunker(default_preset=PRESET_SMALL)
+                sub_target = max(40, len(block_text.strip()) // 2)
+                sub_preset = BatchPreset(
+                    name=f"SubRetry_{sub_target}",
+                    target_chars=sub_target,
+                    max_chars=max(60, int(sub_target * 1.4)),
+                    min_chars=max(15, sub_target // 3),
+                )
+                sub_items = chunker.chunk_text(block_text, preset=sub_preset)
+                if len(sub_items) > 1:
+                    print(f"[ZeroTTS Engine] ⚠️ Block gặp lỗi ({exc}), kích hoạt Adaptive Retry: chia thành {len(sub_items)} sub-chunks...")
+                    sub_audio_parts = []
+                    total_dur = 0.0
+                    for sc_idx, sc in enumerate(sub_items):
+                        tmp_wav = f"{file_path}.retry_tmp_{sc_idx}.wav"
+                        dur, err = synthesize_block_to_file(
+                            block_text=sc.chunk,
+                            file_path=tmp_wav,
+                            tts=tts,
+                            voice_emb=voice_emb,
+                            cfg_scale=cfg_scale,
+                            audio_temperature=audio_temperature,
+                            audio_topk=audio_topk,
+                            audio_topp=audio_topp,
+                            audio_repetition_penalty=audio_repetition_penalty,
+                            eoa_extra_frames=eoa_extra_frames,
+                            max_chunk_sec=max_chunk_sec,
+                            silence_frame=silence_frame,
+                        )
+                        if err:
+                            raise RuntimeError(err)
+                        data, _ = sf.read(tmp_wav)
+                        sub_audio_parts.append(data)
+                        total_dur += dur
+                        if os.path.isfile(tmp_wav):
+                            os.remove(tmp_wav)
+                    merged_full = np.concatenate(sub_audio_parts) if sub_audio_parts else np.zeros(0, dtype=np.float32)
+                    sf.write(file_path, merged_full, tts.sample_rate, subtype="PCM_16")
+                    return total_dur, None
+            except Exception as retry_exc:
+                return 0.0, f"{exc} (Adaptive Retry thất bại: {retry_exc})"
         return 0.0, str(exc)
     finally:
         stream.close()

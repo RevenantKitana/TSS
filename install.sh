@@ -198,6 +198,26 @@ echo -e "${C_GREEN}   ✅ Đã thiết lập cấu trúc lưu trữ và lệnh t
 # ── 7. Cấu hình Systemd Service & Cronjob Tự động ────────────────────────────
 echo -e "${C_YELLOW}⚙️ [7/8] Thiết lập Systemd Service (zerotts.service) & Cronjob...${C_RESET}"
 
+# Tự động tính toán số thread tối ưu dựa trên số lõi CPU thực tế (nproc)
+TOTAL_CORES=$(nproc 2>/dev/null || echo 1)
+if [ "$TOTAL_CORES" -ge 4 ]; then
+    OPT_THREADS=3
+    CPU_QUOTA_CONF="CPUQuota=350%"
+    NICE_CONF="Nice=5"
+elif [ "$TOTAL_CORES" -eq 3 ]; then
+    OPT_THREADS=3
+    CPU_QUOTA_CONF="CPUQuota=260%"
+    NICE_CONF="Nice=5"
+elif [ "$TOTAL_CORES" -eq 2 ]; then
+    OPT_THREADS=2
+    CPU_QUOTA_CONF="CPUQuota=180%"
+    NICE_CONF="Nice=5"
+else
+    OPT_THREADS=1
+    CPU_QUOTA_CONF=""
+    NICE_CONF=""
+fi
+
 # Tìm thư viện jemalloc để tối ưu cấp phát RAM cho Python
 JEMALLOC_PATH=""
 for p in /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/libjemalloc.so.2; do
@@ -223,12 +243,14 @@ User=$CURRENT_USER
 WorkingDirectory=$INSTALL_DIR
 Environment=\"PATH=$INSTALL_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"
 Environment=\"PYTHONUNBUFFERED=1\"
-Environment=\"OMP_NUM_THREADS=1\"
-Environment=\"ONNX_NUM_THREADS=1\"
-Environment=\"OPENBLAS_NUM_THREADS=1\"
-Environment=\"MKL_NUM_THREADS=1\"
-Environment=\"MALLOC_ARENA_MAX=2\"
+Environment=\"OMP_NUM_THREADS=$OPT_THREADS\"
+Environment=\"ONNX_NUM_THREADS=$OPT_THREADS\"
+Environment=\"OPENBLAS_NUM_THREADS=$OPT_THREADS\"
+Environment=\"MKL_NUM_THREADS=$OPT_THREADS\"
+Environment=\"MALLOC_ARENA_MAX=4\"
 $ENV_JEMALLOC
+$NICE_CONF
+$CPU_QUOTA_CONF
 ExecStart=$INSTALL_DIR/.venv/bin/python webui/server.py --host 0.0.0.0 --port 7860 --model $INSTALL_DIR/ZeroTTS_model
 Restart=always
 RestartSec=5s
@@ -269,6 +291,26 @@ fi
 curl -sL "$CF_URL" -o /tmp/cloudflared.deb 2>/dev/null && sudo dpkg -i /tmp/cloudflared.deb >/dev/null 2>&1 && rm -f /tmp/cloudflared.deb || true
 echo -e "${C_GREEN}   ✅ Đã cấu hình tường lửa và cài đặt sẵn cloudflared.${C_RESET}\n"
 
+# Tùy chọn kích hoạt Cloudflare Tunnel ngay trong quá trình cài đặt
+CF_TOKEN="${CF_TUNNEL_TOKEN:-}"
+if [ -z "$CF_TOKEN" ] && [ -t 0 ]; then
+    echo -e "${C_YELLOW}🌐 Bạn có muốn kết nối Cloudflare Tunnel (Zero Trust) ngay bây giờ không?${C_RESET}"
+    echo -e "   (Dán Tunnel Token để kích hoạt tự động, hoặc nhấn ${C_BOLD}Enter${C_RESET} để bỏ qua cấu hình sau)"
+    read -rp "👉 Cloudflare Tunnel Token (Optional): " input_token
+    CF_TOKEN=$(echo "$input_token" | tr -d '[:space:]')
+fi
+
+if [ -n "$CF_TOKEN" ]; then
+    echo "   -> Đang thiết lập dịch vụ Cloudflare Tunnel..."
+    sudo cloudflared service uninstall 2>/dev/null || true
+    if sudo cloudflared service install "$CF_TOKEN" >/dev/null 2>&1; then
+        sudo systemctl restart cloudflared 2>/dev/null || true
+        echo -e "${C_GREEN}   ✅ Đã kích hoạt Cloudflare Tunnel tự động khởi động cùng hệ thống.${C_RESET}\n"
+    else
+        echo -e "${C_RED}   ⚠️ Cài đặt Cloudflare Tunnel thất bại (Kiểm tra lại token). Bạn có thể cấu hình lại sau bằng lệnh 'zerotts tunnel'.${C_RESET}\n"
+    fi
+fi
+
 # ── Lấy IP Công khai & Master Key ────────────────────────────────────────────
 PUBLIC_IP=$(curl -s -m 3 https://api.ipify.org || curl -s -m 3 https://ifconfig.me || echo "140.245.124.221")
 MASTER_KEY=$(grep -o '"zk_[^"]*"' "$INSTALL_DIR/data/auth_keys.json" 2>/dev/null | head -n 1 | tr -d '"' || echo "zk_master_...")
@@ -279,20 +321,18 @@ echo "          🎉 CHÚC MỪNG! HỆ THỐNG ZEROTTS STUDIO ĐÃ ĐƯỢC CÀ
 echo "================================================================================"
 echo -e "${C_RESET}"
 echo -e "  🌐 ${C_BOLD}Địa chỉ truy cập WebUI:${C_RESET} ${C_CYAN}${C_BOLD}http://${PUBLIC_IP}:7860${C_RESET}"
+if systemctl is-active --quiet cloudflared 2>/dev/null; then
+    echo -e "  🛡️ ${C_BOLD}Cloudflare Tunnel:    ${C_RESET} ${C_GREEN}${C_BOLD}Đang hoạt động (Zero Trust HTTPS Masked)${C_RESET}"
+fi
 echo -e "  🔑 ${C_BOLD}Master Key mặc định:  ${C_RESET} ${C_YELLOW}${C_BOLD}${MASTER_KEY}${C_RESET}"
 echo -e "  📁 ${C_BOLD}Thư mục cài đặt:      ${C_RESET} ${INSTALL_DIR}"
 echo ""
 echo -e "  🛠️ ${C_BOLD}CÁC LỆNH QUẢN TRỊ TOÀN CỤC (Gõ trực tiếp ở bất kỳ đâu):${C_RESET}"
 echo -e "     • ${C_BOLD}zerotts${C_RESET}          👉 Mở Menu Quản trị All-In-One"
+echo -e "     • ${C_BOLD}zerotts tunnel${C_RESET}   👉 Quản lý Cloudflare Tunnel (Cài token, Restart, Logs)"
 echo -e "     • ${C_BOLD}zerotts monitor${C_RESET}  👉 Giám sát CPU, RAM, Disk thời gian thực"
 echo -e "     • ${C_BOLD}zerotts keys${C_RESET}     👉 Quản lý Access Key (Tạo, Khóa, Xóa)"
 echo -e "     • ${C_BOLD}zerotts restart${C_RESET}  👉 Khởi động lại Web Server"
 echo -e "     • ${C_BOLD}zerotts logs${C_RESET}     👉 Xem nhật ký hoạt động trực tiếp"
 echo -e "     • ${C_BOLD}zerotts clean${C_RESET}    👉 Dọn dẹp rác & giải phóng dung lượng"
-echo ""
-echo -e "  🛡️ ${C_BOLD}CÁCH MASK IP & PORT 7860 BẰNG CLOUDFLARE TUNNEL (TÙY CHỌN):${C_RESET}"
-echo -e "     • Chạy Quick Tunnel ẩn IP ngay lập tức:"
-echo -e "       ${C_DIM}cloudflared tunnel --url http://127.0.0.1:7860${C_RESET}"
-echo -e "     • Hoặc cài đặt Cloudflare Zero Trust Tunnel với tên miền riêng:"
-echo -e "       ${C_DIM}sudo cloudflared service install <TOKEN_CỦA_BẠN>${C_RESET}"
 echo -e "${C_CYAN}================================================================================${C_RESET}\n"

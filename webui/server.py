@@ -361,6 +361,119 @@ async def api_parse_script(req: ParseRequest):
     }
 
 
+# ── Adaptive Chunker API ────────────────────────────────────────────────────
+
+class AdaptiveChunkPreviewRequest(BaseModel):
+    text: str = Field(..., max_length=engine.MAX_TEXT_CHARS)
+    preset: str = "medium"
+    target_chars: int | None = None
+    max_chars: int | None = None
+    min_chars: int | None = None
+    auto_detect_chapters: bool = True
+    project_name: str = "Du_an_01"
+
+
+@app.get("/api/chunker/presets")
+async def api_chunker_presets():
+    """Return available batch presets and their parameters."""
+    from zerotts.adaptive_chunker import PRESETS
+    presets_list = []
+    for k, p in PRESETS.items():
+        if k in ["small", "medium", "large", "xlarge"]:
+            presets_list.append({
+                "key": k,
+                "name": p.name,
+                "target_chars": p.target_chars,
+                "max_chars": p.max_chars,
+                "min_chars": p.min_chars,
+                "description": p.description,
+            })
+    return {"presets": presets_list}
+
+
+@app.post("/api/chunker/preview")
+async def api_chunker_preview(req: AdaptiveChunkPreviewRequest):
+    """Preview adaptive chunking with boundary detection and statistics."""
+    from zerotts.adaptive_chunker import AdaptiveChunker, BatchPreset, PRESETS
+    from scripts.split_text import parse_and_format_text
+
+    text = req.text.strip()
+    if not text:
+        return {
+            "success": True,
+            "chunks": [],
+            "total_chunks": 0,
+            "total_chars": 0,
+            "stats": {},
+            "formatted_script": "",
+        }
+
+    base_preset = PRESETS.get(req.preset.lower(), PRESETS["medium"])
+    target = req.target_chars if req.target_chars and req.target_chars > 0 else base_preset.target_chars
+    max_c = req.max_chars if req.max_chars and req.max_chars >= target else base_preset.max_chars
+    min_c = req.min_chars if req.min_chars is not None and 0 <= req.min_chars <= target else base_preset.min_chars
+
+    active_preset = BatchPreset(
+        name=base_preset.name,
+        target_chars=target,
+        max_chars=max_c,
+        min_chars=min_c,
+        description=base_preset.description,
+    )
+
+    t0 = time.perf_counter()
+    chunker = AdaptiveChunker(default_preset=active_preset)
+    chunk_objs = chunker.chunk_text(text, preset=active_preset)
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+    stats = {
+        "SENTENCE": 0,
+        "CLAUSE": 0,
+        "WORD": 0,
+        "HARD_CUT": 0,
+        "END_OF_TEXT": 0,
+    }
+
+    chunks_data = []
+    total_chars = 0
+    for idx, c in enumerate(chunk_objs, start=1):
+        stats[c.boundary_type.value] = stats.get(c.boundary_type.value, 0) + 1
+        total_chars += c.char_count
+        chunks_data.append({
+            "index": idx,
+            "text": c.chunk,
+            "char_count": c.char_count,
+            "boundary_type": c.boundary_type.value,
+            "distance_to_target": c.distance_to_target,
+        })
+
+    avg_chars = round(total_chars / len(chunks_data), 1) if chunks_data else 0
+
+    formatted_script = parse_and_format_text(
+        text,
+        default_project_name=req.project_name or "Du_an_01",
+        auto_detect_chapters=req.auto_detect_chapters,
+        preset=req.preset,
+    )
+
+    return {
+        "success": True,
+        "preset": {
+            "name": active_preset.name,
+            "target_chars": active_preset.target_chars,
+            "max_chars": active_preset.max_chars,
+            "min_chars": active_preset.min_chars,
+        },
+        "chunks": chunks_data,
+        "total_chunks": len(chunks_data),
+        "total_chars": total_chars,
+        "avg_chars": avg_chars,
+        "elapsed_ms": elapsed_ms,
+        "stats": stats,
+        "formatted_script": formatted_script,
+    }
+
+
 # ── Safe Generator Helper for ThreadPoolExecutor ────────────────────────────
 _GEN_FINISHED = object()
 

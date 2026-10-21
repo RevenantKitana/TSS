@@ -131,6 +131,7 @@
           <div class="editor-tools">
             <input type="file" id="scriptFileInput" accept=".txt,.docx,.md" style="display: none;">
             <button id="uploadScriptBtn" class="btn-text highlight-tool" title="Nạp nội dung từ file Text (.txt) hoặc Word (.docx)">📁 Nhập file (.txt/.docx)</button>
+            <button id="adaptiveChunkBtn" class="btn-text highlight-tool" style="background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3);" title="Tự động phân đoạn thích ứng thông minh (Adaptive TTS Chunker)">✂️ Phân đoạn thông minh</button>
             <button id="insertProjectBtn" class="btn-text" title="Chèn thẻ Chuỗi Dự án $[Tên_Folder]">+$[Dự án]</button>
             <button id="insertTagBtn" class="btn-text" title="Chèn thẻ phân đoạn Batch [Text 1]">+ Thẻ [Text n]</button>
             <button id="insertPauseBtn" class="btn-text" title="Chèn thẻ tạm dừng nghỉ [pause: 1.5s]">⏸️ + Nghỉ [pause: 1.5s]</button>
@@ -613,6 +614,67 @@ $[Kỹ_năng_giao_tiếp]
       <div class="modal-footer" style="margin-top: 1rem;">
         <button id="understandProjectInfoBtn" class="btn btn-primary btn-start-experience" onclick="window.closeProjectInfoModal ? window.closeProjectInfoModal() : (document.getElementById('projectInfoModal').style.display='none')">
           <span>Bắt đầu trải nghiệm</span> 🚀
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Adaptive Chunker Modal ─────────────────────────────────────────── -->
+  <div id="adaptiveChunkerModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card chunker-modal">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">✂️</span>
+          <h3>Adaptive TTS Text Chunker</h3>
+        </div>
+        <button id="closeChunkerModalBtn" class="btn-icon-close" title="Đóng">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Tự động chia văn bản thành các batch tối ưu cho TTS dựa trên ranh giới câu tự nhiên, tránh ngắt cộc lốc hoặc tràn giới hạn mô hình.
+        </p>
+
+        <div class="chunker-controls-row">
+          <div class="form-group flex-1">
+            <label class="field-label" for="chunkerPresetSelect">📦 Chọn Batch Preset:</label>
+            <select id="chunkerPresetSelect" class="form-control">
+              <option value="small">Small (Mục tiêu 256 / Trần 384) — Đàm thoại, câu ngắn, an toàn</option>
+              <option value="medium" selected>Medium (Mục tiêu 512 / Trần 768) — Chuẩn đọc sách / báo chí</option>
+              <option value="large">Large (Mục tiêu 1024 / Trần 1536) — Đoạn dài, tài liệu, tốc độ</option>
+              <option value="xlarge">X-Large (Mục tiêu 2048 / Trần 3072) — Rất dài, context lớn</option>
+            </select>
+          </div>
+          <div class="form-group checkbox-group" style="align-self: flex-end; padding-bottom: 0.5rem;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chunkerAutoChaptersCheck" checked>
+              <span>Tự phát hiện Chương/Mục ($[Tên])</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="chunkerStatsBar" class="chunker-stats-bar" style="display: none;">
+          <div class="stat-item"><span class="stat-label">Tổng chunks:</span> <strong id="chunkerTotalChunks">0</strong></div>
+          <div class="stat-item"><span class="stat-label">Ký tự TB:</span> <strong id="chunkerAvgChars">0</strong></div>
+          <div class="stat-item"><span class="stat-label">Xử lý:</span> <strong id="chunkerCalcTime">0 ms</strong></div>
+          <div id="chunkerBadges" class="chunker-badges-list"></div>
+        </div>
+
+        <div class="chunker-preview-container">
+          <div class="field-label-row">
+            <label class="field-label">Xem trước phân tách đoạn:</label>
+            <span id="chunkerStatusHint" class="hint-small">Chưa phân tích</span>
+          </div>
+          <div id="chunkerPreviewList" class="chunker-preview-list">
+            <div class="empty-preview-hint">Bấm "Xem trước phân đoạn" để kiểm tra cách văn bản được cắt.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer chunker-modal-footer">
+        <button id="previewChunkerBtn" class="btn btn-secondary">
+          <span>👁️</span> Xem trước phân đoạn
+        </button>
+        <button id="applyChunkerBtn" class="btn btn-primary">
+          <span>✅</span> Áp dụng vào trình soạn thảo
         </button>
       </div>
     </div>

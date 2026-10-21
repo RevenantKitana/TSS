@@ -149,7 +149,27 @@ except Exception as e:
 
     # 6. Cấu hình Systemd Service & Cronjob
     echo -e "${C_YELLOW}⚙️ 6. Thiết lập Systemd Service & Cronjob tự động...${C_RESET}"
-    sudo bash -c "cat > /etc/systemd/system/zerotts.service << 'EOF'
+    
+    TOTAL_CORES=$(nproc 2>/dev/null || echo 1)
+    if [ "$TOTAL_CORES" -ge 4 ]; then
+        OPT_THREADS=3
+        CPU_QUOTA_CONF="CPUQuota=350%"
+        NICE_CONF="Nice=5"
+    elif [ "$TOTAL_CORES" -eq 3 ]; then
+        OPT_THREADS=3
+        CPU_QUOTA_CONF="CPUQuota=260%"
+        NICE_CONF="Nice=5"
+    elif [ "$TOTAL_CORES" -eq 2 ]; then
+        OPT_THREADS=2
+        CPU_QUOTA_CONF="CPUQuota=180%"
+        NICE_CONF="Nice=5"
+    else
+        OPT_THREADS=1
+        CPU_QUOTA_CONF=""
+        NICE_CONF=""
+    fi
+
+    sudo bash -c "cat > /etc/systemd/system/zerotts.service << EOF
 [Unit]
 Description=ZeroTTS Studio Production Server
 After=network.target
@@ -160,8 +180,13 @@ User=ubuntu
 WorkingDirectory=$APP_DIR
 Environment=\"PATH=$APP_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"
 Environment=\"PYTHONUNBUFFERED=1\"
-Environment=\"OMP_NUM_THREADS=1\"
-Environment=\"ONNX_NUM_THREADS=1\"
+Environment=\"OMP_NUM_THREADS=$OPT_THREADS\"
+Environment=\"ONNX_NUM_THREADS=$OPT_THREADS\"
+Environment=\"OPENBLAS_NUM_THREADS=$OPT_THREADS\"
+Environment=\"MKL_NUM_THREADS=$OPT_THREADS\"
+Environment=\"MALLOC_ARENA_MAX=4\"
+$NICE_CONF
+$CPU_QUOTA_CONF
 ExecStart=$APP_DIR/.venv/bin/python webui/server.py --host 0.0.0.0 --port 7860 --model $APP_DIR/ZeroTTS_model
 Restart=always
 RestartSec=5s
@@ -486,6 +511,98 @@ update_source_code() {
     pause_key
 }
 
+# ── [10] Quản lý Cloudflare Tunnel ───────────────────────────────────────────
+manage_cloudflare_tunnel() {
+    while true; do
+        print_banner
+        echo -e "${C_BOLD}${C_CYAN}🌐 QUẢN LÝ CLOUDFLARE TUNNEL (SECURE HTTPS & MASK IP/PORT)${C_RESET}\n"
+
+        # Đảm bảo đã có cloudflared
+        if ! command -v cloudflared &>/dev/null; then
+            echo -e "${C_YELLOW}cloudflared chưa được cài đặt. Đang tự động tải về...${C_RESET}"
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb"
+            else
+                CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb"
+            fi
+            curl -sL "$CF_URL" -o /tmp/cloudflared.deb 2>/dev/null && sudo dpkg -i /tmp/cloudflared.deb >/dev/null 2>&1 && rm -f /tmp/cloudflared.deb || true
+        fi
+
+        # Kiểm tra trạng thái hiện tại
+        if systemctl is-active --quiet cloudflared 2>/dev/null; then
+            STATUS_STR="${C_GREEN}● Đang hoạt động (Running / Connected)${C_RESET}"
+        else
+            STATUS_STR="${C_RED}○ Đang dừng hoặc chưa kích hoạt${C_RESET}"
+        fi
+        echo -e "  • Trạng thái Tunnel: $STATUS_STR"
+
+        if [ -f /etc/cloudflared/token ]; then
+            echo -e "  • Token hiện tại:    ${C_YELLOW}Đã lưu (/etc/cloudflared/token)${C_RESET}\n"
+        else
+            echo -e "  • Token hiện tại:    ${C_DIM}Chưa có token${C_RESET}\n"
+        fi
+
+        echo -e "  ${C_BOLD}[1] 🔑 Cài đặt / Đổi Cloudflare Tunnel Token mới${C_RESET}"
+        echo -e "  ${C_BOLD}[2] 🔄 Khởi động lại Tunnel (Restart cloudflared)${C_RESET}"
+        echo -e "  ${C_BOLD}[3] 📜 Xem nhật ký kết nối trực tiếp (Live Tunnel Logs)${C_RESET}"
+        echo -e "  ${C_BOLD}[4] ⏹️ Dừng / Gỡ bỏ dịch vụ Tunnel (Uninstall)${C_RESET}"
+        echo -e "  ${C_BOLD}[0] ↩️ Quay lại menu chính${C_RESET}"
+        echo -e "${C_CYAN}--------------------------------------------------------------------------------${C_RESET}"
+
+        read -rp "👉 Chọn thao tác (0-4): " cf_choice
+        case "$cf_choice" in
+            1)
+                echo ""
+                read -rp "👉 Dán Cloudflare Tunnel Token: " new_token
+                new_token=$(echo "$new_token" | tr -d '[:space:]')
+                if [ -n "$new_token" ]; then
+                    echo "Đang cấu hình Cloudflare Tunnel service..."
+                    sudo cloudflared service uninstall 2>/dev/null || true
+                    if sudo cloudflared service install "$new_token"; then
+                        sudo systemctl restart cloudflared
+                        echo -e "${C_GREEN}\n✅ Cài đặt Tunnel thành công và đã khởi động!${C_RESET}"
+                    else
+                        echo -e "${C_RED}\n❌ Cài đặt thất bại, vui lòng kiểm tra lại token.${C_RESET}"
+                    fi
+                else
+                    echo -e "${C_YELLOW}Token trống, đã hủy thao tác.${C_RESET}"
+                fi
+                pause_key
+                ;;
+            2)
+                echo "Đang khởi động lại cloudflared.service..."
+                sudo systemctl restart cloudflared 2>/dev/null || true
+                sleep 2
+                sudo systemctl status cloudflared --no-pager | head -n 12
+                pause_key
+                ;;
+            3)
+                echo -e "${C_YELLOW}Đang theo dõi nhật ký Cloudflare Tunnel (Nhấn Ctrl+C để thoát)...${C_RESET}\n"
+                journalctl -u cloudflared -f -n 50 --no-pager
+                pause_key
+                ;;
+            4)
+                echo ""
+                read -rp "⚠️ Bạn có chắc muốn gỡ bỏ dịch vụ Tunnel? (y/N): " confirm_uninstall
+                if [[ "$confirm_uninstall" =~ ^[yY]$ ]]; then
+                    sudo cloudflared service uninstall 2>/dev/null || true
+                    sudo systemctl stop cloudflared 2>/dev/null || true
+                    echo -e "${C_GREEN}✅ Đã dừng và gỡ bỏ dịch vụ Cloudflare Tunnel.${C_RESET}"
+                fi
+                pause_key
+                ;;
+            0|q|Q)
+                return
+                ;;
+            *)
+                echo -e "${C_RED}Lựa chọn không hợp lệ.${C_RESET}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # ── Main Menu Loop ───────────────────────────────────────────────────────────
 main_menu() {
     while true; do
@@ -499,10 +616,11 @@ main_menu() {
         echo -e "  ${C_BOLD}${C_YELLOW}[7] 🧹 Dọn dẹp Rác & Giải phóng Dung lượng${C_RESET} ${C_DIM}(Purge Expired & Clean Cache)${C_RESET}"
         echo -e "  ${C_BOLD}${C_GREEN}[8] 🛡️ Cấu hình Tường lửa & Mạng${C_RESET} ${C_DIM}(UFW, Oracle Ports 80/443/7860)${C_RESET}"
         echo -e "  ${C_BOLD}${C_CYAN}[9] 📦 Cập nhật Mã nguồn từ GitHub${C_RESET} ${C_DIM}(Git Checkout Stable)${C_RESET}"
+        echo -e "  ${C_BOLD}${C_BLUE}[10] 🌐 Quản lý Cloudflare Tunnel${C_RESET} ${C_DIM}(Zero Trust, HTTPS, Mask IP)${C_RESET}"
         echo -e "  ${C_BOLD}${C_RED}[0] 🚪 Thoát${C_RESET}"
         echo -e "${C_CYAN}================================================================================${C_RESET}"
 
-        read -rp "👉 Chọn chức năng (0-9): " choice
+        read -rp "👉 Chọn chức năng (0-10): " choice
 
         case "$choice" in
             1) setup_from_scratch ;;
@@ -514,6 +632,7 @@ main_menu() {
             7) clean_system ;;
             8) configure_firewall ;;
             9) update_source_code ;;
+            10|tunnel) manage_cloudflare_tunnel ;;
             0|q|Q|exit)
                 echo -e "\n${C_CYAN}Cảm ơn bạn đã sử dụng ZeroTTS Toolkit. Tạm biệt!${C_RESET}\n"
                 exit 0
@@ -538,5 +657,6 @@ case "$1" in
     clean) clean_system ;;
     firewall) configure_firewall ;;
     update) update_source_code ;;
+    tunnel) manage_cloudflare_tunnel ;;
     *) main_menu ;;
 esac
