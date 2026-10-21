@@ -29,6 +29,7 @@ js/public/ggml/models
 .DS_Store
 
 #
+*.key
 
 FreetierVM-2/
 

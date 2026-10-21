@@ -1,0 +1,7 @@
+curl -sSL https://raw.githubusercontent.com/RevenantKitana/TSS/main/install.sh | bash
+
+chmod +x ~/TSS/*.sh ~/TSS/scripts/*.sh
+zerotts
+
+# xóa temp:
+rm -rf ~/TSS/outputs/ephemeral/*
