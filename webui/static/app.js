@@ -113,6 +113,17 @@
     localStorage.setItem('zerotts_session_id', currentSessionId);
   }
 
+  // Tự động nhận diện token từ URL (?token=... hoặc ?key=...) để tự động đăng nhập
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryToken = urlParams.get('token') || urlParams.get('key');
+    if (queryToken && queryToken.trim()) {
+      localStorage.setItem('zerotts_token', queryToken.trim());
+    }
+  } catch (e) {
+    console.warn('Không thể đọc token từ URL:', e);
+  }
+
   let currentAuth = {
     tier: 'guest',
     name: 'Khách',
