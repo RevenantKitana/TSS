@@ -1,12 +1,13 @@
 {
-  "name": "UXkjUt7xVkyKy5QRclKJ",
-  "display_name": "Quỳnh Anh (UX)",
+  "name": "Cam",
+  "display_name": "Cam",
   "language": "vi",
   "gender": "nữ",
-  "description": "nữ, trẻ",
+  "description": "nữ, trẻ, miền Bắc",
   "tags": [
     "nữ",
-    "trẻ"
+    "trẻ",
+    "miền Bắc"
   ],
   "n_voice_queries": 10,
   "shape": [

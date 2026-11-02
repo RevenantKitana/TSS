@@ -34,13 +34,17 @@ the default used throughout this README and the demos.
 | `quangminh` | Quang Minh | nam | trẻ · tin tức · rõ ràng · dứt khoát |
 | `tiendat` | Tiến Đạt | nam | trẻ · bình luận · sôi nổi · năng lượng cao |
 | `quynhanh` | Quỳnh Anh | nữ | trẻ · tự nhiên · cuốn hút |
-| `67yCRDCTn1vlOHOzbohB` | MC Thanh Mai | nam | trẻ · miền Bắc · truyện |
-| `DO0LS49Nwrh1zOVazCNu` | Cam | nữ | trẻ · miền Bắc |
-| `MAJfDVfQqPF5Fr4DvibN` | Thức Dậy Đi | nam | trung niên |
-| `QY9oBcDlg6j3ux0aQvaT` | Nga | nữ | trẻ · miền Bắc |
-| `UXkjUt7xVkyKy5QRclKJ` | Quỳnh Anh (UX) | nữ | trẻ |
-| `fGzWJBbunhI1HhvY0hoO` | Anh Hải | nam | trung niên · ấm áp · kể chuyện |
-| `ncKF5UoqE1ouwOv5vnfq` | Yến Nhi | nữ | trẻ · nhẹ nhàng |
+| `Anh hải aiducation` | Anh Hải | nam | trung niên · ấm áp · kể chuyện |
+| `Cam` | Cam | nữ | trẻ · miền Bắc |
+| `Chị gái nhà người ta` | Cj gái nhà người ta | nam | male · young · northern |
+| `MC Thanh Mai` | MC Thanh Mai | nam | trẻ · miền Bắc · truyện |
+| `Nga` | Nga | nữ | trẻ · miền Bắc |
+| `Ngọc Huyền` | Ngọc Huyền | nam | kể truyện · review phim |
+| `Quỳnh anh` | Quỳnh Anh (UX) | nữ | trẻ |
+| `Thức Dậy Đi` | Thức Dậy Đi | nam | trung niên |
+| `Tán Tỉnh có duyên` | Tán tỉnh có duyên | nữ | nữ · trẻ · miền Bắc · dễ thương |
+| `Vẫn vẫn radio` | Vẫn Vẫn Radio | nữ | nữ · trẻ · miền Nam · ấm áp · kể chuyện |
+| `Yến Nhi` | Yến Nhi | nữ | trẻ · nhẹ nhàng |
 
 `v.tags` (a `list[str]`) and `v.gender`/`v.display_name` read straight off each
 pack's `meta.json` — see [Voice pack format](#voice-pack-format) below.

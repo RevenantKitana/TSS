@@ -226,7 +226,7 @@ async def get_voice_sample(name: str = Query(...)):
     return FileResponse(
         preview_path,
         media_type="audio/wav",
-        headers={"X-Voice-Source": os.path.abspath(preview_path)}
+        headers={"X-Voice-Source": urllib.parse.quote(os.path.abspath(preview_path))}
     )
 
 

@@ -1,17 +1,191 @@
 {
   "voices": [
     {
-      "name": "maichi",
-      "display_name": "Mai Chi",
+      "name": "Anh hải aiducation",
+      "display_name": "Anh Hải",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trung niên, ấm áp, kể chuyện",
+      "tags": [
+        "nam",
+        "trung niên",
+        "ấm áp",
+        "kể chuyện"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Cam",
+      "display_name": "Cam",
       "language": "vi",
       "gender": "nữ",
-      "description": "nữ, trẻ, kể chuyện, nhẹ nhàng, thân thiện",
+      "description": "nữ, trẻ, miền Bắc",
       "tags": [
         "nữ",
         "trẻ",
-        "kể chuyện",
-        "nhẹ nhàng",
-        "thân thiện"
+        "miền Bắc"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Chị gái nhà người ta",
+      "display_name": "Cj gái nhà người ta",
+      "language": "vi",
+      "gender": "nam",
+      "description": "Male, Young, Northern",
+      "tags": [
+        "male",
+        "young",
+        "northern"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "MC Thanh Mai",
+      "display_name": "MC Thanh Mai",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trẻ, miền Bắc, truyện",
+      "tags": [
+        "nam",
+        "trẻ",
+        "miền Bắc",
+        "truyện"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Nga",
+      "display_name": "Nga",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ, miền Bắc",
+      "tags": [
+        "nữ",
+        "trẻ",
+        "miền Bắc"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Ngọc Huyền",
+      "display_name": "Ngọc Huyền",
+      "language": "vi",
+      "gender": "nam",
+      "description": "kể truyện, review phim",
+      "tags": [],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Quỳnh anh",
+      "display_name": "Quỳnh Anh (UX)",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ",
+      "tags": [
+        "nữ",
+        "trẻ"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Thức Dậy Đi",
+      "display_name": "Thức Dậy Đi",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trung niên",
+      "tags": [
+        "nam",
+        "trung niên"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Tán Tỉnh có duyên",
+      "display_name": "Tán tỉnh có duyên",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "dễ thương",
+      "tags": [
+        "female",
+        "young",
+        "northern"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Vẫn vẫn radio",
+      "display_name": "Vẫn Vẫn Radio",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "ấm áp, kể chuyện",
+      "tags": [
+        "female",
+        "young",
+        "southern"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "Yến Nhi",
+      "display_name": "Yến Nhi",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ, nhẹ nhàng",
+      "tags": [
+        "nữ",
+        "trẻ",
+        "nhẹ nhàng"
       ],
       "n_voice_queries": 10,
       "shape": [
@@ -41,26 +215,6 @@
       ]
     },
     {
-      "name": "kimoanh",
-      "display_name": "Kim Oanh",
-      "language": "vi",
-      "gender": "nữ",
-      "description": "nữ, trung niên, kể chuyện, ấm áp, truyền cảm",
-      "tags": [
-        "nữ",
-        "trung niên",
-        "kể chuyện",
-        "ấm áp",
-        "truyền cảm"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
       "name": "giahuy",
       "display_name": "Gia Huy",
       "language": "vi",
@@ -72,66 +226,6 @@
         "kể chuyện",
         "trầm ấm",
         "tâm tình"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "huuduc",
-      "display_name": "Hữu Đức",
-      "language": "vi",
-      "gender": "nam",
-      "description": "nam, lớn tuổi, kể chuyện, trầm, điềm đạm",
-      "tags": [
-        "nam",
-        "lớn tuổi",
-        "kể chuyện",
-        "trầm",
-        "điềm đạm"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "quangminh",
-      "display_name": "Quang Minh",
-      "language": "vi",
-      "gender": "nam",
-      "description": "nam, trẻ, tin tức, rõ ràng, dứt khoát",
-      "tags": [
-        "nam",
-        "trẻ",
-        "tin tức",
-        "rõ ràng",
-        "dứt khoát"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "tiendat",
-      "display_name": "Tiến Đạt",
-      "language": "vi",
-      "gender": "nam",
-      "description": "nam, trẻ, bình luận, sôi nổi, năng lượng cao",
-      "tags": [
-        "nam",
-        "trẻ",
-        "bình luận",
-        "sôi nổi",
-        "năng lượng cao"
       ],
       "n_voice_queries": 10,
       "shape": [
@@ -161,6 +255,86 @@
       ]
     },
     {
+      "name": "huuduc",
+      "display_name": "Hữu Đức",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, lớn tuổi, kể chuyện, trầm, điềm đạm",
+      "tags": [
+        "nam",
+        "lớn tuổi",
+        "kể chuyện",
+        "trầm",
+        "điềm đạm"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "kimoanh",
+      "display_name": "Kim Oanh",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trung niên, kể chuyện, ấm áp, truyền cảm",
+      "tags": [
+        "nữ",
+        "trung niên",
+        "kể chuyện",
+        "ấm áp",
+        "truyền cảm"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "maichi",
+      "display_name": "Mai Chi",
+      "language": "vi",
+      "gender": "nữ",
+      "description": "nữ, trẻ, kể chuyện, nhẹ nhàng, thân thiện",
+      "tags": [
+        "nữ",
+        "trẻ",
+        "kể chuyện",
+        "nhẹ nhàng",
+        "thân thiện"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
+      "name": "quangminh",
+      "display_name": "Quang Minh",
+      "language": "vi",
+      "gender": "nam",
+      "description": "nam, trẻ, tin tức, rõ ràng, dứt khoát",
+      "tags": [
+        "nam",
+        "trẻ",
+        "tin tức",
+        "rõ ràng",
+        "dứt khoát"
+      ],
+      "n_voice_queries": 10,
+      "shape": [
+        1,
+        10,
+        768
+      ]
+    },
+    {
       "name": "quynhanh",
       "display_name": "Quỳnh Anh",
       "language": "vi",
@@ -180,123 +354,17 @@
       ]
     },
     {
-      "name": "67yCRDCTn1vlOHOzbohB",
-      "display_name": "MC Thanh Mai",
+      "name": "tiendat",
+      "display_name": "Tiến Đạt",
       "language": "vi",
       "gender": "nam",
-      "description": "nam, trẻ, miền Bắc, truyện",
+      "description": "nam, trẻ, bình luận, sôi nổi, năng lượng cao",
       "tags": [
         "nam",
         "trẻ",
-        "miền Bắc",
-        "truyện"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "DO0LS49Nwrh1zOVazCNu",
-      "display_name": "Cam",
-      "language": "vi",
-      "gender": "nữ",
-      "description": "nữ, trẻ, miền Bắc",
-      "tags": [
-        "nữ",
-        "trẻ",
-        "miền Bắc"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "MAJfDVfQqPF5Fr4DvibN",
-      "display_name": "Thức Dậy Đi",
-      "language": "vi",
-      "gender": "nam",
-      "description": "nam, trung niên",
-      "tags": [
-        "nam",
-        "trung niên"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "QY9oBcDlg6j3ux0aQvaT",
-      "display_name": "Nga",
-      "language": "vi",
-      "gender": "nữ",
-      "description": "nữ, trẻ, miền Bắc",
-      "tags": [
-        "nữ",
-        "trẻ",
-        "miền Bắc"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "UXkjUt7xVkyKy5QRclKJ",
-      "display_name": "Quỳnh Anh (UX)",
-      "language": "vi",
-      "gender": "nữ",
-      "description": "nữ, trẻ",
-      "tags": [
-        "nữ",
-        "trẻ"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "fGzWJBbunhI1HhvY0hoO",
-      "display_name": "Anh Hải",
-      "language": "vi",
-      "gender": "nam",
-      "description": "nam, trung niên, ấm áp, kể chuyện",
-      "tags": [
-        "nam",
-        "trung niên",
-        "ấm áp",
-        "kể chuyện"
-      ],
-      "n_voice_queries": 10,
-      "shape": [
-        1,
-        10,
-        768
-      ]
-    },
-    {
-      "name": "ncKF5UoqE1ouwOv5vnfq",
-      "display_name": "Yến Nhi",
-      "language": "vi",
-      "gender": "nữ",
-      "description": "nữ, trẻ, nhẹ nhàng",
-      "tags": [
-        "nữ",
-        "trẻ",
-        "nhẹ nhàng"
+        "bình luận",
+        "sôi nổi",
+        "năng lượng cao"
       ],
       "n_voice_queries": 10,
       "shape": [

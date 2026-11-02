@@ -50,4 +50,18 @@ docs/PLAN.md
 # Embedded Python temporary / cache directories
 python-*-embed-*/
 
+# ==============================================================================
+# Báo cáo thực tập tốt nghiệp & Các công cụ biên soạn, chuyển đổi tài liệu
+# ==============================================================================
+*.docx
+*.pdf
+*.asd
+docs/word/
+docs/review.txt
 
+# Các script hỗ trợ xuất, đo đạc và kiểm thử báo cáo
+scripts/*
+!scripts/cron_cleanup.sh
+!scripts/split_text.py
+!scripts/test_chunker_benchmark.py
+!scripts/zerotts_tool.sh
