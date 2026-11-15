@@ -49,6 +49,8 @@ docs/PLAN.md
 
 # Embedded Python temporary / cache directories
 python-*-embed-*/
+python/
+uv.exe
 
 # ==============================================================================
 # Báo cáo thực tập tốt nghiệp & Các công cụ biên soạn, chuyển đổi tài liệu
