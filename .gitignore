@@ -65,3 +65,5 @@ scripts/*
 !scripts/split_text.py
 !scripts/test_chunker_benchmark.py
 !scripts/zerotts_tool.sh
+
+#key: zk_key_dc8d9995695f3dbebd2a1011
